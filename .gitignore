@@ -1,0 +1,11 @@
+node_modules/
+.clasp.json
+.clasprc.json
+gas/node_modules/
+.wrangler/
+.DS_Store
+*.log
+*.xlsx
+.playwright-cli/
+output/
+gas/deployment-id.txt

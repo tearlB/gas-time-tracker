@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f0f4f9">
+  <meta name="description" content="週で課題を作り、日はその日の予定を選ぶ">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;display=block&amp;icon_names=add,arrow_back,arrow_drop_down,arrow_upward,check,chevron_left,chevron_right,close,cloud_done,cloud_upload,coffee,delete,drag_indicator,edit,edit_note,event,expand_more,folder,info,link,open_in_new,pause,play_arrow,push_pin,redo,remove,settings,sticky_note_2,timer,undo,waving_hand" rel="stylesheet">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <? if (getServiceUrl()) { ?>
+  <link rel="manifest" href="<?= getServiceUrl() ?>?page=manifest">
+  <? } ?>
+  <title>まとめて工数管理さん</title>
+  <!-- UI_STYLES -->
+</head>
+<body>
+  <div class="app-shell">
+    <header class="sidebar">
+      <div class="brand">
+        <span class="brand-copy"><strong>まとめて工数管理さん</strong></span>
+      </div>
+      <div class="calendar-command" id="calendarCommand">
+        <md-icon-button touch-target="wrapper" class="period-arrow" id="navBack" title="前の画面に戻る (Alt+←)" aria-label="前の画面に戻る" disabled><span class="material-symbols-outlined">arrow_back</span></md-icon-button>
+        <md-outlined-button class="today-button" id="calendarToday" type="button" title="今日へ移動">今日</md-outlined-button>
+        <md-icon-button touch-target="wrapper" class="period-arrow" id="calendarPrev" title="前の期間" aria-label="前の期間"><span class="material-symbols-outlined">chevron_left</span></md-icon-button>
+        <md-icon-button touch-target="wrapper" class="period-arrow" id="calendarNext" title="次の期間" aria-label="次の期間"><span class="material-symbols-outlined">chevron_right</span></md-icon-button>
+        <!-- 期間は文字で見せ、押すとその下に日付選択（Material 3 の Docked date picker の形）を開く。 -->
+        <button class="period-picker" id="calendarPeriodButton" type="button" title="日付を選んで移動" aria-haspopup="dialog" aria-expanded="false" aria-controls="datePicker">
+          <span class="period-picker-label" id="calendarPeriodLabel"></span><span class="period-picker-label is-short" id="calendarPeriodShortLabel"></span>
+          <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+        </button>
+        <input id="calendarPeriodInput" type="hidden">
+        <div class="date-picker" id="datePicker" role="dialog" aria-label="日付を選ぶ" hidden></div>
+      </div>
+      <div class="sidebar-spacer"></div>
+      <md-filled-tonal-button class="timer-presence" id="timerPresence" hidden title="この日を開く">
+        <span class="timer-presence-content">
+          <span class="timer-dot" aria-hidden="true"></span>
+          <span class="timer-presence-clock" id="timerPresenceClock">00:00:00</span>
+          <span class="timer-presence-task" id="timerPresenceTask">—</span>
+          <span class="timer-presence-meta" id="timerPresenceMeta">—</span>
+        </span>
+      </md-filled-tonal-button>
+      <div class="save-dock" id="saveDock" role="toolbar" aria-label="保存と編集履歴">
+        <div class="history-actions" aria-label="編集履歴">
+          <md-icon-button touch-target="wrapper" id="undoEdit" title="元に戻す (Ctrl/Cmd+Z)" aria-label="元に戻す" disabled><span class="material-symbols-outlined">undo</span></md-icon-button>
+          <md-icon-button touch-target="wrapper" id="redoEdit" title="やり直す (Ctrl/Cmd+Y)" aria-label="やり直す" disabled><span class="material-symbols-outlined">redo</span></md-icon-button>
+        </div>
+        <!-- 保存状態は雲のアイコンで示し、押すと今すぐ保存する。状態の文は読み上げとマウスオーバー用。 -->
+        <small class="visually-hidden" id="saveDockHint" role="status">変更はありません</small>
+        <md-circular-progress class="save-spinner" id="saveSpinner" indeterminate hidden aria-label="保存中"></md-circular-progress>
+        <md-icon-button touch-target="wrapper" class="save-dock-button" id="saveDockButton" title="今すぐ保存 (Ctrl/Cmd+S)" aria-label="今すぐ保存"><span class="material-symbols-outlined" id="saveDockIcon" aria-hidden="true">cloud_done</span></md-icon-button>
+      </div>
+      <md-icon-button touch-target="wrapper" class="quick-actual-launcher" id="quickActualButton" title="今日の実績を入力" aria-label="今日の実績を入力" aria-haspopup="dialog" aria-expanded="false" aria-controls="quickActualPanel"><span class="material-symbols-outlined" aria-hidden="true">edit_note</span></md-icon-button>
+      <div class="view-menu-wrap">
+        <md-outlined-button class="view-menu-button" id="viewMenuButton" type="button" trailing-icon has-icon aria-haspopup="menu" title="表示の切り替え"><span id="viewMenuLabel">週</span><span class="material-symbols-outlined" slot="icon" aria-hidden="true">arrow_drop_down</span></md-outlined-button>
+        <md-menu id="viewMenu" anchor="viewMenuButton" positioning="fixed" aria-label="表示の切り替え">
+          <md-menu-item data-view="day"><div slot="headline">日</div><div slot="trailing-supporting-text">D</div></md-menu-item>
+          <md-menu-item data-view="week"><div slot="headline">週</div><div slot="trailing-supporting-text">W</div></md-menu-item>
+          <md-menu-item data-view="month"><div slot="headline">月</div><div slot="trailing-supporting-text">M</div></md-menu-item>
+          <md-divider role="separator"></md-divider>
+          <md-menu-item data-view="projects"><div slot="headline">プロジェクト</div><div slot="trailing-supporting-text">P</div></md-menu-item>
+        </md-menu>
+      </div>
+      <md-icon-button touch-target="wrapper" class="settings-launcher" id="openAppSettings" title="設定" aria-label="設定"><span class="material-symbols-outlined" aria-hidden="true">settings</span></md-icon-button>
+    </header>
+
+    <aside class="quick-actual" id="quickActualPanel" role="dialog" aria-label="今日の実績" hidden>
+      <header class="quick-head">
+        <div><strong>今日の実績</strong><small class="quick-date"></small></div>
+        <p class="quick-total"><b>0.00</b><span>h</span></p>
+        <md-icon-button touch-target="wrapper" class="quick-open-day" title="日タブでこの日を開く" aria-label="日タブでこの日を開く"><span class="material-symbols-outlined" aria-hidden="true">event</span></md-icon-button>
+        <md-icon-button touch-target="wrapper" class="quick-close" title="閉じる (Esc)" aria-label="閉じる"><span class="material-symbols-outlined" aria-hidden="true">close</span></md-icon-button>
+      </header>
+      <ul class="quick-list"></ul>
+      <div class="quick-empty-box"></div>
+      <div class="quick-actions">
+        <md-text-button class="quick-add-issue" type="button">週の課題から選ぶ</md-text-button>
+        <md-text-button class="quick-add-today" type="button">今日だけの作業</md-text-button>
+      </div>
+      <footer class="quick-foot"><small class="quick-status" role="status"></small></footer>
+    </aside>
+
+    <main class="main">
+      <div class="content">
+        <section id="dailyView" hidden>
+          <header class="view-header">
+            <h1>日次入力</h1>
+            <div class="header-actions"><span class="mode-pill" id="dailyMode">読込中</span><small id="saveHint">変更はありません</small><md-filled-button class="primary-button" id="saveDaily" type="button">保存</md-filled-button></div>
+          </header>
+
+          <div class="planning-storage is-unset" id="dailyStorageNotice" hidden>
+            <div class="planning-storage-copy"><strong>データ保存先を設定してください</strong><small>選択したDriveフォルダに年次管理ファイルを新規作成します</small></div>
+            <div class="planning-storage-actions"><md-filled-button class="primary-button" id="configureStorageDaily" type="button">保存先を設定</md-filled-button></div>
+          </div>
+
+          <section class="daily-command" aria-label="日次サマリー" hidden>
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"metric","label":"合計工数","value":"0.00","meta":"入力済み","className":"is-coral","valueId":"todayHours","unit":"h"} -->
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"metric","label":"タスク","value":"0","meta":"継続中 0件","valueId":"taskCount","unit":"件","metaId":"ongoingCount"} -->
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"metric","label":"稼働消化","value":"—","meta":"本日 ÷ 稼働","valueId":"dailyProgress","unit":"%","metaId":"dailyProgressMeta"} -->
+          </section>
+
+          <div class="timer-ribbon is-idle" id="timerRibbon" title="作業の行の ▶ で計測を始め、✓ で止めると時間が実績に入ります。PC がスリープしていた間は離席として、記録するか確認します。">
+            <span class="timer-leading" aria-hidden="true"><span class="material-symbols-outlined">timer</span></span>
+            <div class="timer-copy"><small id="timerState"></small><strong id="timerTask">計測していません</strong></div>
+            <div class="timer-trailing">
+              <span class="timer-clock" id="timerClock">00:00:00</span>
+              <div class="timer-actions">
+                <md-icon-button touch-target="wrapper" class="timer-icon" id="pauseTimer" title="一時停止" aria-label="一時停止"><span class="material-symbols-outlined">pause</span></md-icon-button>
+                <md-icon-button touch-target="wrapper" class="timer-icon" id="stopTimer" title="停止して記録" aria-label="停止して記録"><span class="material-symbols-outlined">check</span></md-icon-button>
+                <md-icon-button touch-target="wrapper" class="timer-icon" id="cancelTimer" title="計測をキャンセル" aria-label="計測をキャンセル"><span class="material-symbols-outlined">close</span></md-icon-button>
+              </div>
+            </div>
+          </div>
+
+          <div class="action-strip">
+            <md-filled-button class="primary-button" id="importSuggestions" type="button" title="週の予定やサブタスクから、今日取り組む作業を選んで行に追加します。行の ▶ で時間を計測できます。">課題を追加</md-filled-button>
+          </div>
+
+          <section class="section is-first">
+            <div class="section-heading"><div><h2>今日の実績</h2><p class="daily-mobile-total"><b id="dailyMobileTotal">0</b><span>時間</span></p><p>週の課題を選んで時間を入れます。カレンダー予定は自動で入ります。実績から削除すると週予定も「実施しない」になります。予定にない作業は「今日だけ」で記録します。</p></div><span class="shortcut">週の課題から選ぶ (<kbd>Ctrl/Cmd+Enter</kbd>)</span></div>
+            <div class="panel task-board">
+              <table class="task-table">
+                <colgroup>
+                  <col class="col-handle">
+                  <col class="col-done">
+                  <col class="col-issue">
+                  <col class="col-origin">
+                  <col class="col-project">
+                  <col class="col-num col-today">
+                  <col class="col-num">
+                  <col class="col-num">
+                  <col class="col-remaining">
+                  <col class="col-status">
+                  <col class="col-actions">
+                </colgroup>
+                <thead>
+                  <tr class="task-board-head">
+                    <th scope="col" class="task-col-handle"><span class="visually-hidden">並び替え</span></th>
+                    <th scope="col" class="task-col-done"><span class="visually-hidden">完了</span></th>
+                    <th scope="col">課題</th>
+                    <th scope="col" class="task-col-origin">区分</th>
+                    <th scope="col" class="task-col-project">プロジェクト</th>
+                    <th scope="col" class="task-col-num" title="この日に入れた実績（右は合計）">本日実績 <span class="task-head-total"><b id="dailyTotalHours">0</b>h</span></th>
+                    <th scope="col" class="task-col-num" title="この日より前の週予定の実績">前日まで</th>
+                    <th scope="col" class="task-col-num" title="週予定の予定工数">予定工数</th>
+                    <th scope="col" class="task-col-num" title="予定工数から、本日を含む累計実績を引いた時間">残り工数</th>
+                    <th scope="col" class="task-col-status">状態</th>
+                    <th scope="col" class="task-col-actions"><span class="visually-hidden">操作</span></th>
+                  </tr>
+                </thead>
+                <tbody class="task-list" id="taskList"></tbody>
+              </table>
+              <div class="add-row-group">
+                <button class="add-row" id="addTask" type="button"><span class="material-symbols-outlined" aria-hidden="true">add</span>週の課題から選ぶ</button>
+                <button class="add-row is-side" id="addInterrupt" type="button"><span class="material-symbols-outlined" aria-hidden="true">add</span>今日だけの作業</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="section" id="dailyShareSection">
+            <div class="section-heading"><div><h2>共有テキスト</h2><p>今日の実績から共有用のテキストを作ります</p></div></div>
+            <div class="panel report-panel">
+              <md-outlined-text-field id="reportText" type="textarea" rows="6" read-only placeholder="実績を入れるとここに表示されます" aria-label="共有テキスト"></md-outlined-text-field>
+              <div class="report-actions"><md-outlined-button class="ghost-button" id="generateReport" type="button">テキスト生成</md-outlined-button><md-filled-button class="primary-button" id="copyReport" type="button">コピー</md-filled-button></div>
+            </div>
+          </section>
+          <!-- スマホでは行は読むだけにし、押すとこのシートで時間・計測・削除を操作する（中身は開くときに描く）。 -->
+          <div class="daily-sheet-backdrop" id="dailyRowSheetBackdrop" hidden></div>
+          <div class="daily-sheet" id="dailyRowSheet" role="dialog" aria-modal="true" aria-label="作業の編集" hidden></div>
+        </section>
+
+        <section id="planningView">
+          <header class="view-header">
+            <h1>予定管理</h1>
+            <div class="period-command">
+              <div class="segmented"><md-filled-tonal-button class="is-active" id="weekMode" type="button">週</md-filled-tonal-button></div>
+              <md-icon-button touch-target="wrapper" class="period-arrow" id="prevPeriod" title="前の期間" aria-label="前の期間"><span class="material-symbols-outlined">chevron_left</span></md-icon-button>
+              <input class="period-input" id="periodInput" type="week" aria-label="対象期間">
+              <md-icon-button touch-target="wrapper" class="period-arrow" id="nextPeriod" title="次の期間" aria-label="次の期間"><span class="material-symbols-outlined">chevron_right</span></md-icon-button>
+              <md-outlined-button class="ghost-button" id="currentPeriod" type="button">今期</md-outlined-button>
+            </div>
+          </header>
+
+          <div class="planning-storage is-unset" id="planningStorage" hidden>
+            <div class="planning-storage-copy"><strong id="planningStorageName">データ保存先が未設定です</strong><small id="planningStoragePath">日次・予定の保存先をまとめて設定します</small></div>
+            <div class="planning-storage-actions"><md-outlined-button class="ghost-button" id="openPlanningSheet" type="button" hidden>ファイルを開く</md-outlined-button><md-filled-button class="primary-button" id="configurePlanning" type="button">保存先を設定</md-filled-button></div>
+          </div>
+
+          <section class="planning-summary" aria-label="期間サマリー" hidden>
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"summary","label":"予定","value":"0.00","meta":"0タスク","valueId":"planHours","unit":"h","metaId":"planCount"} -->
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"summary","label":"実績","value":"0.00","meta":"消化率 —","valueId":"actualHours","unit":"h","metaId":"consumeRate"} -->
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"summary","label":"状態","value":"進行中","meta":"進行中 0 · 完了 0","className":"is-secondary","id":"statusSummaryCard","valueId":"weekStatus","valueOnContainer":true,"metaId":"statusMeta"} -->
+          </section>
+
+          <div class="planning-main-grid">
+            <section class="panel week-board" aria-labelledby="weekBoardTitle">
+              <header class="plan-board-head">
+                <div><h2 id="weekBoardTitle">週間予定</h2><p id="periodRange">対象期間を読み込んでいます</p></div>
+                <div class="forecast-head-actions">
+                  <md-outlined-button class="ghost-button" id="importBacklog" type="button">Backlogから追加</md-outlined-button>
+                  <md-filled-button class="primary-button" id="addPlan" type="button">予定を追加</md-filled-button>
+                </div>
+              </header>
+              <div class="timeline-load-status"><span id="weekTimelineStatus" aria-live="polite"></span><md-text-button id="retryWeekTimeline" type="button" hidden>再読み込み</md-text-button></div>
+              <div class="week-calendar-scroll" id="weekCalendar"></div>
+              <footer class="plan-save"><span id="weekBoardHint">変更は自動保存されます。予定は開始日〜終了日のバーで押さえ、実績だけを日ごとに表示します。終了日を過ぎても完了していない予定は、次の週にも「期限切れ」として出ます。</span><md-filled-button class="primary-button" id="savePlan" type="button">今すぐ保存</md-filled-button></footer>
+            </section>
+          </div>
+        </section>
+
+        <section id="monthView" hidden>
+          <section class="panel month-board" aria-labelledby="monthBoardTitle">
+            <header class="plan-board-head">
+              <div><h2 id="monthBoardTitle">月の予定</h2><p id="monthRange">対象月を読み込んでいます</p></div>
+              <div class="forecast-head-actions">
+              </div>
+            </header>
+            <div class="month-filter" role="search" aria-label="月の予定の絞り込み">
+              <md-outlined-text-field class="field month-filter-query" id="monthFilterQuery" type="search" label="予定名で絞り込む" autocomplete="off"></md-outlined-text-field>
+              <md-outlined-select class="field month-filter-select" id="monthFilterProject" label="プロジェクト" quick>
+                <md-select-option value="" selected><div slot="headline">すべて</div></md-select-option>
+              </md-outlined-select>
+              <md-outlined-select class="field month-filter-select" id="monthFilterStatus" label="状態" quick>
+                <md-select-option value="" selected><div slot="headline">すべて</div></md-select-option>
+                <md-select-option value="open"><div slot="headline">未完了</div></md-select-option>
+                <md-select-option value="done"><div slot="headline">完了</div></md-select-option>
+              </md-outlined-select>
+              <label class="month-filter-toggle"><md-checkbox id="monthFilterDeviation" touch-target="wrapper" title="期限切れ・前倒し・期限超過など、予定日からずれている予定だけを表示" aria-label="予定日からずれている予定だけ"></md-checkbox><span>予定日からずれている予定だけ</span></label>
+              <span class="month-filter-count" id="monthFilterCount"></span>
+              <md-text-button id="clearMonthFilter" type="button" hidden>絞り込みを解除</md-text-button>
+            </div>
+            <div class="timeline-load-status"><span id="monthTimelineStatus" aria-live="polite"></span><md-text-button id="retryMonthTimeline" type="button" hidden>再読み込み</md-text-button></div>
+            <div class="month-gantt-scroll" id="monthGantt"></div>
+            <footer class="plan-save"><span>見るだけの画面です。予定を押すと、その予定がある週の画面へ移動して編集できます。日付を押すと、その日の実績を開きます。</span></footer>
+          </section>
+        </section>
+
+        <section id="projectsView" hidden>
+          <header class="view-header projects-header">
+            <div><h1>プロジェクト</h1><p>プロジェクトごとの課題、月次の稼働予定、実績と状況説明をまとめます</p></div>
+            <div class="project-period-command">
+              <md-filled-button class="primary-button" id="addProject" type="button">プロジェクトを登録</md-filled-button>
+            </div>
+          </header>
+
+          <div class="planning-storage is-unset" id="projectStorageNotice" hidden>
+            <div class="planning-storage-copy"><strong>データ保存先を設定してください</strong><small>プロジェクトと月次の稼働設定を保存する場所を設定します</small></div>
+            <div class="planning-storage-actions"><md-filled-button class="primary-button" id="configureStorageProjects" type="button">保存先を設定</md-filled-button></div>
+          </div>
+
+          <section class="planning-summary project-summary" aria-label="プロジェクトサマリー">
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"summary","label":"1人月","value":"0.00","meta":"稼働可能時間の合計","className":"is-secondary","valueId":"projectCapacityHours","unit":"h","metaId":"projectCapacityMeta"} -->
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"summary","label":"プロジェクト予定","value":"0.00","meta":"1人月の配分 0%","valueId":"projectPlanHours","unit":"h","metaId":"projectPlanMeta"} -->
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"summary","label":"プロジェクト実績","value":"0.00","meta":"1人月の使用 0%","valueId":"projectActualHours","unit":"h","metaId":"projectConsumeMeta"} -->
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"summary","label":"未配分","value":"0.00","meta":"1人月 − プロジェクト予定","id":"projectUnallocatedCard","valueId":"projectUnallocatedHours","unit":"h","metaId":"projectUnallocatedMeta"} -->
+            <!-- UI_COMPONENT summaryCardHtml {"kind":"summary","label":"状態","value":"—","meta":"稼働中 0 · 要確認 0","className":"is-secondary","valueId":"projectStatusSummary","valueOnContainer":true,"metaId":"projectStatusMeta"} -->
+          </section>
+
+          <section class="section is-first">
+            <div class="section-heading"><div><h2><span id="projectMonthHeading">2026年09月のプロジェクト</span></h2><p>1人月は、その月の稼働可能時間の合計です。プロジェクトごとに予定時間を配分し、残りが未配分になります。</p></div></div>
+            <div class="project-list" id="projectList"><div class="empty-state"><strong>プロジェクトを読み込んでいます…</strong></div></div>
+          </section>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <div id="planContextMenuAnchor" aria-hidden="true"></div>
+  <div id="planStatusMenuAnchor" aria-hidden="true"></div>
+  <md-menu id="planStatusMenu" anchor="planStatusMenuAnchor" positioning="fixed" aria-label="予定の状態">
+    <md-menu-item data-progress="todo"><div slot="headline">未着手</div></md-menu-item>
+    <md-menu-item data-progress="doing"><div slot="headline">進行中</div></md-menu-item>
+    <md-menu-item data-progress="done"><div slot="headline">完了</div></md-menu-item>
+  </md-menu>
+  <md-menu id="planContextMenu" anchor="planContextMenuAnchor" positioning="fixed">
+    <md-menu-item data-action="up"><div slot="headline">優先を上げる</div></md-menu-item>
+    <md-menu-item data-action="down"><div slot="headline">優先を下げる</div></md-menu-item>
+    <md-divider></md-divider>
+    <md-menu-item data-action="done"><div slot="headline">完了にする</div></md-menu-item>
+    <md-menu-item data-action="edit"><div slot="headline">編集</div></md-menu-item>
+    <md-menu-item data-action="delete"><div slot="headline">削除</div></md-menu-item>
+  </md-menu>
+  <md-dialog class="app-dialog backlog-import-dialog" id="backlogImportDialog" aria-label="Backlogから週予定へ追加">
+    <!-- UI_COMPONENT dialogHeadlineHtml {"title":"Backlogから週予定へ追加","closeId":"closeBacklogImport"} -->
+    <div slot="content">
+      <p>自分が担当する未完了課題です。予定工数と期間はBacklogから引き継ぎます。取り込み後にBacklogで変わった値は、取り込み済みの課題に表示され、押して反映できます。</p>
+      <div class="backlog-import-toolbar"><md-outlined-text-field class="field" id="backlogIssueQuery" label="課題キー・件名で絞り込み"></md-outlined-text-field><md-text-button id="reloadBacklogIssues" type="button">再取得</md-text-button></div>
+      <div class="backlog-import-selectbar"><md-text-button id="selectAllBacklogIssues" type="button">表示中をすべて選択</md-text-button><p id="backlogImportStatus" role="status"></p></div>
+      <div id="backlogIssueList" class="candidate-list"></div>
+      <md-text-button id="loadMoreBacklogIssues" type="button" hidden>続きを取得</md-text-button>
+    </div>
+    <div slot="actions"><md-text-button id="cancelBacklogImport" type="button">キャンセル</md-text-button><md-filled-button id="addBacklogIssues" type="button" disabled>選んだ課題を追加</md-filled-button></div>
+  </md-dialog>
+  <md-dialog class="app-dialog" id="candidateDialog" aria-label="週の課題から選ぶ">
+    <!-- UI_COMPONENT dialogHeadlineHtml {"titleId":"candidateTitle","title":"週の課題から選ぶ","closeId":"closeCandidates"} -->
+    <div slot="content">
+      <section class="candidate-week" aria-label="週の課題">
+        <div class="candidate-toolbar">
+          <md-outlined-text-field class="candidate-search" id="candidateSearch" placeholder="課題名で探す" aria-label="課題名で探す" autocomplete="off"></md-outlined-text-field>
+          <!-- UI_COMPONENT choiceGroupHtml {"className":"candidate-scope","id":"candidateScope","label":"表示する週","selected":"current","items":[{"value":"current","label":"今週","attributes":{"data-scope":"current"}},{"value":"upcoming","label":"これから","attributes":{"data-scope":"upcoming"}}]} -->
+        </div>
+        <div class="candidate-list" id="candidateList"></div>
+      </section>
+      <section class="daily-issue-composer" id="dailyIssueComposer" aria-label="今日だけの作業" hidden>
+        <p class="daily-issue-composer-note">週予定や予実には入りません。作成後に本日実績を入力し、作業が終わったら完了にしてください。</p>
+        <md-outlined-text-field class="field" id="dailyNewIssueTitle" label="作業名" maxlength="200" placeholder="例）問い合わせ対応" autocomplete="off"></md-outlined-text-field>
+      </section>
+    </div>
+    <div slot="actions" class="dialog-actions"><md-outlined-button class="ghost-button" id="cancelCandidates" type="button">キャンセル</md-outlined-button><md-filled-button class="primary-button" id="addDailyNewIssue" type="button" hidden>今日だけ記録する</md-filled-button><md-filled-button class="primary-button" id="addCandidates" type="button">選んだ課題を入れる</md-filled-button></div>
+  </md-dialog>
+  <md-dialog class="app-dialog plan-dialog" id="planDialog" aria-label="予定">
+    <!-- UI_COMPONENT dialogHeadlineHtml {"titleId":"planDialogTitle","title":"予定を追加","closeId":"closePlanDialog","eyebrowClass":"plan-dialog-eyebrow","eyebrow":"週の予定","copyClass":"plan-dialog-head-copy","className":"plan-dialog-head"} -->
+    <div slot="content" class="plan-dialog-fields">
+        <div class="plan-dialog-title-block">
+          <md-outlined-text-field class="plan-dialog-title-field" id="planDialogName" label="予定名" maxlength="200" placeholder="予定の名前" autocomplete="off"></md-outlined-text-field>
+          <div class="plan-name-text" id="planDialogNameText" hidden></div>
+          <a class="plan-issue-link" id="planDialogIssueLink" target="_blank" rel="noopener noreferrer" hidden><span class="material-symbols-outlined" aria-hidden="true">link</span>Backlog <span class="plan-issue-link-key"></span> を開く</a>
+          <p class="plan-dialog-meta" id="planDialogMeta">期間を決めて予定を押さえます</p>
+        </div>
+        <div class="plan-dialog-toolbar">
+          <div class="plan-dialog-priority" id="planDialogPriority" hidden>
+            <md-outlined-button class="ghost-button" id="movePlanUp" type="button">優先を上げる</md-outlined-button>
+            <md-outlined-button class="ghost-button" id="movePlanDown" type="button">優先を下げる</md-outlined-button>
+          </div>
+        </div>
+        <div class="plan-dialog-primary">
+        <section class="plan-dialog-section plan-dialog-span plan-dialog-period" aria-label="予定期間">
+          <div class="plan-dialog-grid">
+            <label>開始日<input class="field" id="planDialogStartDate" type="date"></label>
+            <label>終了日<input class="field" id="planDialogEndDate" type="date"></label>
+          </div>
+          <md-text-button class="plan-dialog-clear-period" id="clearPlanDialogPeriod" type="button">日付を消す（期間未定にする）</md-text-button>
+          <p class="plan-dialog-hint" id="planDialogPeriodHint">この期間を予定として押さえます。日ごとの時間は決めず、実績だけを記録します。</p>
+        </section>
+        <section class="plan-dialog-section plan-dialog-span plan-dialog-attrs" aria-label="状態・工数・プロジェクト">
+          <md-outlined-select class="field plan-progress-select" id="planDialogProgress" label="状態" quick>
+            <md-select-option value="todo" selected><div slot="headline">未着手</div></md-select-option>
+            <md-select-option value="doing"><div slot="headline">進行中</div></md-select-option>
+            <md-select-option value="done"><div slot="headline">完了</div></md-select-option>
+          </md-outlined-select>
+          <md-outlined-text-field class="field number-field" id="planDialogPlanned" label="予定工数" type="number" min="0" step="0.25" suffix-text="h"></md-outlined-text-field>
+          <md-outlined-select class="field plan-project-select" id="planDialogProject" label="プロジェクト" quick>
+            <md-select-option value="" selected><div slot="headline">未設定</div></md-select-option>
+          </md-outlined-select>
+        </section>
+        <p class="plan-dialog-hint plan-dialog-span" id="planDialogProjectHint">未設定の実績はプロジェクトに入りません。</p>
+        <section class="plan-dialog-section plan-dialog-note-section" aria-label="備考">
+          <md-outlined-text-field class="field plan-dialog-note-field" id="planDialogNote" type="textarea" rows="5" label="備考" maxlength="2000" placeholder="詳細や、実績との差の理由（改行・URLも使えます）"></md-outlined-text-field>
+        </section>
+        </div>
+        <section class="plan-dialog-section plan-dialog-subtasks" id="planDialogSubtasks" aria-label="サブタスク">
+          <div class="plan-dialog-subtasks-head">
+            <strong>サブタスク</strong>
+            <md-outlined-button class="ghost-button" id="addPlanDialogSubtask" type="button"><span class="material-symbols-outlined" slot="icon" aria-hidden="true">add</span>追加</md-outlined-button>
+          </div>
+          <div class="plan-dialog-subtask-cols" aria-hidden="true"><span>完了</span><span>サブタスク名</span><span class="plan-dialog-unit"><span>予定</span><span>h</span></span><span>実績</span><span></span></div>
+          <div class="plan-dialog-subtask-list" id="planDialogSubtaskList"></div>
+          <p class="plan-dialog-issue-sum" id="planDialogIssueSum" hidden></p>
+        </section>
+      </div>
+    <div slot="actions" class="plan-dialog-actions">
+      <md-text-button class="danger-button" id="deletePlanDialog" type="button" hidden>削除</md-text-button>
+      <md-outlined-button class="ghost-button" id="cancelPlanDialog" type="button">キャンセル</md-outlined-button>
+      <md-filled-button class="primary-button" id="commitPlanDialog" type="button">追加</md-filled-button>
+    </div>
+  </md-dialog>
+  <md-dialog class="app-dialog plan-dialog" id="monthPlanDialog" aria-label="予定の編集">
+    <!-- UI_COMPONENT dialogHeadlineHtml {"titleId":"monthPlanTitle","title":"予定の編集","closeId":"closeMonthPlan"} -->
+    <div slot="content" class="plan-dialog-fields">
+      <div class="plan-dialog-title-block">
+        <div class="plan-name-text" id="monthPlanName"></div>
+        <a class="plan-issue-link" id="monthPlanIssueLink" target="_blank" rel="noopener noreferrer" hidden><span class="material-symbols-outlined" aria-hidden="true">link</span>Backlog <span class="plan-issue-link-key"></span> を開く</a>
+        <p class="plan-dialog-meta">名前とサブタスクの編集は、週の画面で行います。</p>
+      </div>
+      <div class="plan-dialog-primary">
+        <section class="plan-dialog-section plan-dialog-span plan-dialog-period" aria-label="予定期間">
+          <div class="plan-dialog-grid">
+            <label>開始日<input class="field" id="monthPlanStart" type="date"></label>
+            <label>終了日<input class="field" id="monthPlanEnd" type="date"></label>
+          </div>
+          <md-text-button class="plan-dialog-clear-period" id="clearMonthPlanPeriod" type="button">日付を消す（期間未定にする）</md-text-button>
+        </section>
+        <section class="plan-dialog-section plan-dialog-span plan-dialog-attrs" aria-label="工数・プロジェクト">
+          <md-outlined-text-field class="field number-field" id="monthPlanPlanned" label="予定工数" type="number" min="0" step="0.25" suffix-text="h"></md-outlined-text-field>
+          <md-outlined-select class="field plan-project-select" id="monthPlanProject" label="プロジェクト" quick>
+            <md-select-option value="" selected><div slot="headline">未設定</div></md-select-option>
+          </md-outlined-select>
+        </section>
+        <section class="plan-dialog-section plan-dialog-note-section" aria-label="備考">
+          <md-outlined-text-field class="field plan-dialog-note-field" id="monthPlanNote" type="textarea" rows="5" label="備考" maxlength="2000" placeholder="詳細や、実績との差の理由（改行・URLも使えます）"></md-outlined-text-field>
+        </section>
+        <div class="settings-check-row"><md-switch aria-label="完了にする" id="monthPlanDone"></md-switch><span><strong>完了にする</strong></span></div>
+      </div>
+    </div>
+    <div slot="actions" class="plan-dialog-actions">
+      <p class="plan-dialog-hint month-plan-status" id="monthPlanStatus" role="status">変更は自動で保存されます。</p>
+      <md-text-button id="openMonthPlanWeek" type="button">週の画面で開く</md-text-button>
+      <md-filled-button class="primary-button" id="closeMonthPlanDone" type="button">閉じる</md-filled-button>
+    </div>
+  </md-dialog>
+  <md-dialog class="app-dialog" id="planningSetupDialog" aria-label="データ保存先を設定">
+    <!-- UI_COMPONENT dialogHeadlineHtml {"titleId":"planningSetupTitle","title":"データ保存先を設定","closeId":"closePlanningSetup"} -->
+    <div slot="content" class="storage-form">
+      <div class="folder-result storage-current" id="planningStorageCurrent"></div>
+      <md-outlined-segmented-button-set class="storage-mode" id="storageModeSet" aria-label="保存先の決め方"><md-outlined-segmented-button data-storage-mode="create" label="新しく作る" selected></md-outlined-segmented-button><md-outlined-segmented-button data-storage-mode="attach" label="既存のフォルダを使う"></md-outlined-segmented-button></md-outlined-segmented-button-set>
+      <p class="storage-note" id="storageModeNote">選んだ場所の中に「管理フォルダ」を作り、その中に年ごとの管理ファイル（スプレッドシート）を作ります。日次・予定・実績は、対象の年のファイルに保存されます。</p>
+      <div class="storage-field"><span class="field-label" id="folderBrowserLabel">1. 管理フォルダを作る場所を選ぶ（Drive）</span><div class="folder-browser"><div class="folder-browser-bar"><md-icon-button touch-target="wrapper" id="folderBrowserBack" title="1つ上のフォルダへ" aria-label="1つ上のフォルダへ" disabled><span class="material-symbols-outlined">arrow_upward</span></md-icon-button><nav class="folder-breadcrumb" id="folderBrowserPath" aria-label="現在の場所"><span class="folder-crumb is-current">マイドライブ</span></nav></div><div class="folder-list" id="folderBrowserList" role="listbox" aria-labelledby="folderBrowserLabel"><div class="folder-browser-empty">フォルダを読み込んでいます…</div></div><p class="folder-browser-note" id="folderBrowserNote" hidden>表示件数が多いため、先頭500件まで表示しています。</p><div class="folder-browser-foot"><span class="material-symbols-outlined" aria-hidden="true">folder</span><span class="folder-selection" id="folderSelection">選択中: —</span></div></div><p class="folder-browser-hint" id="folderBrowserHint">クリックで選択、ダブルクリックまたは右端の「›」で中を開きます。何も選ばないと、いま開いているフォルダに作ります。</p></div>
+      <div class="folder-result" id="planningFolderResult" hidden><strong id="planningFolderName">—</strong><small id="planningFolderPath">—</small><ul class="folder-result-files" id="planningFolderFiles" hidden></ul></div>
+      <md-outlined-text-field class="field" id="appFileName" label="2. 管理フォルダの名前" maxlength="120" value="まとめて工数管理さん"></md-outlined-text-field>
+      <p class="storage-warning" id="storageWarning">「確認する」を押したあとに、作成するフォルダと年次ファイルを最終確認します。確認するまではDriveに何も作成しません。</p>
+    </div>
+    <div slot="actions" class="dialog-actions"><md-outlined-button class="ghost-button" id="cancelPlanningSetup" type="button">キャンセル</md-outlined-button><md-filled-button class="primary-button" id="createPlanningStorage" type="button" disabled>確認する</md-filled-button></div>
+  </md-dialog>
+  <!-- 標準の confirm の代わりに使う確認ダイアログ（confirmDialog が文言を差し込む）。 -->
+  <md-dialog class="app-dialog confirm-dialog" id="confirmDialog" role="alertdialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
+    <div slot="headline" class="dialog-headline"><span class="dialog-title" id="confirmDialogTitle">確認</span></div>
+    <div slot="content"><p class="confirm-dialog-message" id="confirmDialogMessage"></p></div>
+    <div slot="actions" class="dialog-actions"><md-text-button id="confirmDialogCancel" type="button">キャンセル</md-text-button><md-filled-button class="primary-button" id="confirmDialogOk" type="button">OK</md-filled-button></div>
+  </md-dialog>
+  <md-dialog class="app-dialog plan-dialog" id="calendarEventDialog" aria-label="カレンダー予定">
+    <!-- UI_COMPONENT dialogHeadlineHtml {"titleId":"calendarEventTitle","title":"カレンダー予定","closeId":"closeCalendarEvent"} -->
+    <div slot="content" class="plan-dialog-fields">
+      <p class="plan-dialog-meta" id="calendarEventWhen">—</p>
+      <md-outlined-text-field class="field number-field" id="calendarEventHours" label="実績時間（h）" type="number" min="0.25" step="0.25"></md-outlined-text-field>
+      <p class="plan-dialog-meta">この日に記録します。予定時間と実績時間が違う場合は「今日だけ」の実績として扱います。</p>
+    </div>
+    <div slot="actions" class="plan-dialog-actions">
+      <md-text-button class="danger-button" id="excludeCalendarEvent" type="button">実施しない</md-text-button>
+      <md-outlined-button class="ghost-button" id="restoreCalendarEvent" type="button" hidden>除外を取り消す</md-outlined-button>
+      <md-outlined-button class="ghost-button" id="cancelCalendarEvent" type="button">キャンセル</md-outlined-button>
+      <md-filled-button class="primary-button" id="commitCalendarEvent" type="button">実績で記録</md-filled-button>
+    </div>
+  </md-dialog>
+  <md-dialog class="app-dialog away-dialog" id="awayDialog" aria-label="おかえりなさい">
+    <!-- UI_COMPONENT dialogHeadlineHtml {"titleId":"awayDialogTitle","title":"おかえりなさい","closeId":"closeAwayDialog"} -->
+    <div slot="content" class="away-body">
+        <div class="away-hello">
+          <div class="away-buddy" aria-hidden="true"><span class="material-symbols-outlined">waving_hand</span></div>
+          <p class="away-hours"><span id="awayDialogHours">—</span><small>h</small></p>
+          <p class="away-when" id="awayDialogWhen">—</p>
+          <p class="away-task" hidden><span>計測中</span><strong id="awayDialogTaskName"></strong></p>
+        </div>
+        <div class="away-picks">
+          <md-filled-tonal-button class="away-pick away-pick-break" id="awayDialogBreak" type="button"><span class="material-symbols-outlined" slot="icon" aria-hidden="true">coffee</span>休憩にする</md-filled-tonal-button>
+          <md-filled-tonal-button class="away-pick away-pick-keep" id="awayDialogKeep" type="button"><span class="material-symbols-outlined" slot="icon" aria-hidden="true">play_arrow</span>このタスクのまま</md-filled-tonal-button>
+        </div>
+        <div class="away-else">
+          <label>別の作業<md-outlined-select class="field" id="awayDialogTask" quick></md-outlined-select></label>
+          <md-outlined-text-field class="field" id="awayDialogName" label="新しい今日だけの作業" maxlength="200" placeholder="一覧にない作業名" autocomplete="off"></md-outlined-text-field>
+          <md-filled-button class="primary-button" id="awayDialogMove" type="button">別タスクに記録</md-filled-button>
+        </div>
+    </div>
+  </md-dialog>
+  <md-dialog class="app-dialog plan-dialog" id="capacityDialog" aria-label="稼働時間">
+    <!-- UI_COMPONENT dialogHeadlineHtml {"titleId":"capacityDialogTitle","title":"稼働時間","closeId":"closeCapacityDialog"} -->
+    <div slot="content" class="plan-dialog-fields">
+      <p class="plan-dialog-meta" id="capacityDialogDate">—</p>
+      <md-outlined-text-field class="field number-field" id="capacityHours" label="稼働可能時間" type="number" min="0" max="24" step="0.25" suffix-text="h"></md-outlined-text-field>
+      <md-outlined-text-field class="field" id="capacityReason" label="理由" maxlength="80" placeholder="休み、時短、休日出勤など"></md-outlined-text-field>
+    </div>
+    <div slot="actions" class="plan-dialog-actions">
+      <md-outlined-button class="ghost-button" id="cancelCapacityDialog" type="button">キャンセル</md-outlined-button>
+      <md-filled-button class="primary-button" id="commitCapacityDialog" type="button">保存</md-filled-button>
+    </div>
+  </md-dialog>
+  <md-dialog class="app-dialog project-dialog" id="projectDialog" aria-label="プロジェクト">
+    <!-- UI_COMPONENT dialogHeadlineHtml {"titleId":"projectDialogTitle","title":"プロジェクトを登録","closeId":"closeProjectDialog","eyebrowClass":"project-dialog-eyebrow","eyebrow":"プロジェクト"} -->
+    <div slot="content" class="project-dialog-fields">
+      <md-outlined-text-field class="field" id="projectDialogName" label="プロジェクト名" maxlength="200" placeholder="例）顧客ポータル刷新" autocomplete="off"></md-outlined-text-field>
+      <div class="plan-dialog-grid">
+        <label>状態
+          <md-outlined-select class="field" id="projectDialogStatus" quick>
+            <md-select-option value="active" selected><div slot="headline">進行中</div></md-select-option>
+            <md-select-option value="paused"><div slot="headline">保留</div></md-select-option>
+            <md-select-option value="done"><div slot="headline">完了</div></md-select-option>
+            <md-select-option value="archived"><div slot="headline">アーカイブ</div></md-select-option>
+          </md-outlined-select>
+        </label>
+        <label>開始日<input class="field" id="projectDialogStartDate" type="date"></label>
+      </div>
+      <label>終了予定日<input class="field" id="projectDialogEndDate" type="date"></label>
+      <md-outlined-text-field class="field project-dialog-textarea" id="projectDialogDescription" type="textarea" rows="3" label="プロジェクトの説明" maxlength="2000" placeholder="目的、対象、関係者などを残せます"></md-outlined-text-field>
+      <p class="project-dialog-permanent-note">この画面で登録するプロジェクト情報は月に依存せず保存されます。月ごとの予定稼働時間と稼働状況の説明は、プロジェクト一覧から設定できます。</p>
+    </div>
+    <div slot="actions" class="dialog-actions"><md-outlined-button class="ghost-button" id="cancelProjectDialog" type="button">キャンセル</md-outlined-button><md-filled-button class="primary-button" id="commitProjectDialog" type="button">登録</md-filled-button></div>
+  </md-dialog>
+  <md-dialog class="app-dialog app-settings-dialog" id="appSettingsDialog" aria-label="設定">
+    <!-- UI_COMPONENT dialogHeadlineHtml {"titleId":"appSettingsTitle","title":"設定","closeId":"closeAppSettings"} -->
+    <div slot="content" class="settings-layout">
+      <nav class="settings-nav" id="settingsTabs" aria-label="設定の目次">
+        <div class="settings-nav-group"><p class="settings-nav-label">はじめに</p>
+          <!-- UI_COMPONENT navigationItemHtml {"label":"使い方","selected":false,"attributes":{"id":"settingsTabGuide","data-settings-tab":"guide","aria-controls":"settingsPanelGuide"}} -->
+          <!-- UI_COMPONENT navigationItemHtml {"label":"フィードバック","selected":false,"attributes":{"id":"settingsTabFeedback","data-settings-tab":"feedback","aria-controls":"settingsPanelFeedback"}} -->
+        </div>
+        <div class="settings-nav-group"><p class="settings-nav-label">アプリ</p>
+          <!-- UI_COMPONENT navigationItemHtml {"label":"保存先・データ","selected":true,"attributes":{"id":"settingsTabGeneral","data-settings-tab":"general","aria-controls":"settingsPanelGeneral"}} -->
+          <!-- UI_COMPONENT navigationItemHtml {"label":"勤務時間","selected":false,"attributes":{"id":"settingsTabWork","data-settings-tab":"work","aria-controls":"settingsPanelWork"}} -->
+          <!-- UI_COMPONENT navigationItemHtml {"label":"表示・操作","selected":false,"attributes":{"id":"settingsTabDisplay","data-settings-tab":"display","aria-controls":"settingsPanelDisplay"}} -->
+        </div>
+        <div class="settings-nav-group"><p class="settings-nav-label">外部連携</p>
+          <!-- UI_COMPONENT navigationItemHtml {"label":"Googleカレンダー","selected":false,"attributes":{"id":"settingsTabCalendar","data-settings-tab":"calendar","aria-controls":"settingsPanelCalendar"}} -->
+          <!-- UI_COMPONENT navigationItemHtml {"label":"Google Tasks","selected":false,"attributes":{"id":"settingsTabGoogleTasks","data-settings-tab":"googleTasks","aria-controls":"settingsPanelGoogleTasks"}} -->
+          <!-- UI_COMPONENT navigationItemHtml {"label":"Backlog","selected":false,"attributes":{"id":"settingsTabBacklog","data-settings-tab":"backlog","aria-controls":"settingsPanelBacklog"}} -->
+        </div>
+        <div class="settings-nav-group"><p class="settings-nav-label">管理</p>
+          <!-- UI_COMPONENT navigationItemHtml {"label":"詳細設定","selected":false,"attributes":{"id":"settingsTabAdvanced","data-settings-tab":"advanced","aria-controls":"settingsPanelAdvanced"}} -->
+        </div>
+      </nav>
+      <div class="settings-details">
+      <section class="settings-panel" id="settingsPanelGuide" role="region" aria-labelledby="settingsTabGuide" data-settings-panel="guide" hidden>
+        <h2>使い方</h2>
+        <p class="settings-panel-intro">予定を立て、日々の実績を入れ、月ごとに振り返るまでの流れです。この説明は、設定の「使い方」からいつでも開けます。</p>
+        <ol class="guide-steps">
+          <li><h3>保存先を決める</h3><p>最初に、データを保存するGoogle Driveの保存先を設定します。ここが未設定だと、予定も実績も保存されません。</p><p class="guide-status" id="guideStorageStatus" role="status">現在の保存先を確認しています…</p><md-text-button type="button" data-guide-go="general" id="guideStorageButton">保存先を設定する</md-text-button></li>
+          <li><h3>週で予定を立てる</h3><p>「週」で、今週やる予定を追加し、期間と予定工数を決めます。日付の＋から追加でき、予定の帯の端をドラッグすると期間を変えられます。Backlogの課題は「Backlogから追加」で取り込めます。</p><md-text-button type="button" data-guide-go="week">週を開く</md-text-button></li>
+          <li><h3>日で実績を入れる</h3><p>「日」で、その日にやった作業の時間を入れます。予定の作業は一覧から追加し、予定にない作業は「今日だけ」で追加します。タイマーで計測することもできます。</p><md-text-button type="button" data-guide-go="day">日を開く</md-text-button></li>
+          <li><h3>月とプロジェクトで振り返る</h3><p>「月」では予定の進み具合を一覧で、「プロジェクト」ではプロジェクトごとの月の時間と割合を確認できます。</p><md-text-button type="button" data-guide-go="month">月を開く</md-text-button><md-text-button type="button" data-guide-go="projects">プロジェクトを開く</md-text-button></li>
+          <li><h3>スプレッドシートで直接見る・使う</h3><p>データは、保存先の年次管理ファイル（Googleスプレッドシート）に入っています。スプレッドシートを開いて直接編集したり、AIにこのファイルを読ませて、稼働のサマリーや報告文を作らせたりもできます。直接編集するときは、見出し行や列の順番は変えないでください。</p><md-text-button type="button" data-guide-go="sheet">年次管理ファイルを開く</md-text-button></li>
+          <li><h3>外部サービスとつなぐ</h3><p>Googleカレンダーの予定を実績に回したり、Google Tasksと同期したり、Backlogの課題を予定に取り込んだりできます。Backlogは、プロジェクトごとにこのアプリのプロジェクトを割り当てておくと、取り込み時に自動で付きます。</p><md-text-button type="button" data-guide-go="calendar">Googleカレンダー</md-text-button><md-text-button type="button" data-guide-go="googleTasks">Google Tasks</md-text-button><md-text-button type="button" data-guide-go="backlog">Backlog</md-text-button></li>
+          <li><h3>便利な操作</h3><p>D・W・M・P で日・週・月・プロジェクトに切り替え、T で今日へ、A で今日の実績パネルを開けます（キーは変更できます）。Ctrl+Z で元に戻し、Alt+← で前にいた画面に戻れます。</p><md-text-button type="button" data-guide-go="display">ショートカットキーの設定</md-text-button></li>
+          <li id="guideFeedbackStep"><h3>困ったとき・要望があるとき</h3><p>不具合や「こうなってほしい」は、フィードバックから匿名で送れます（名前やメールアドレスは記録されません）。送った内容は開発者だけが見られます。設定の「フィードバック」からも送れます。</p><md-text-button type="button" data-guide-go="feedback-form">フィードバックを送る</md-text-button></li>
+        </ol>
+      </section>
+
+      <section class="settings-panel" id="settingsPanelFeedback" role="region" aria-labelledby="settingsTabFeedback" data-settings-panel="feedback" hidden>
+        <h2>フィードバック</h2>
+        <p class="settings-panel-intro">不具合や「こうなってほしい」などの要望を送れます。匿名で送られ、名前やメールアドレスは記録されません。送った内容は開発者だけが見られます。</p>
+        <p class="settings-panel-intro">不具合のときは、どの画面で、何をしたら、どうなったかを書いてもらえると助かります。</p>
+        <div class="settings-panel-actions"><md-filled-button class="primary-button" id="openFeedbackForm" type="button">フィードバックを送る</md-filled-button></div>
+      </section>
+      <section class="settings-panel is-active" id="settingsPanelGeneral" role="region" aria-labelledby="settingsTabGeneral" data-settings-panel="general">
+        <h2>保存先・データ</h2>
+        <p class="settings-panel-intro">工数データの保存先と、年次管理ファイルを管理します。</p>
+        <div class="settings-group">
+          <h3>保存先とファイル</h3>
+          <p class="settings-panel-intro">日次・予定・プロジェクトのデータをGoogle Driveに保存します。</p>
+          <div class="settings-panel-actions">
+            <md-outlined-button class="ghost-button" id="manageStorage" type="button">Driveの保存先を設定</md-outlined-button>
+            <md-outlined-button class="ghost-button" id="openSheet" type="button">年次管理ファイルを開く</md-outlined-button>
+          </div>
+        </div>
+        <div class="settings-group">
+          <h3>データの再読み込み</h3>
+          <p class="settings-panel-intro">シートを直接編集したあとに、アプリが覚えている内容を捨てて読み直します。</p>
+          <div class="settings-panel-actions"><md-outlined-button class="ghost-button" id="syncSpreadsheet" type="button">シートと同期</md-outlined-button></div>
+        </div>
+        <div class="settings-group">
+          <h3>データの点検と復元</h3>
+          <p class="settings-panel-intro">シートの直接編集や保存の失敗で、データが壊れていないかを点検します。壊れていた場合は、スプレッドシートの変更履歴から、正常だった時刻の版に戻します。</p>
+          <p class="settings-summary" id="dataHealthSummary">保存の記録を確認しています…</p>
+          <div class="data-health-result" id="dataHealthResult"></div>
+          <div class="settings-panel-actions"><md-outlined-button class="ghost-button" id="checkDataHealth" type="button">データを点検</md-outlined-button></div>
+          <details class="data-health-guide">
+            <summary>変更履歴から戻す手順</summary>
+            <ol>
+              <li>アプリでの保存を止めます（このあと日次や予定を編集しないでください）。</li>
+              <li>上の「年次管理ファイルを開く」でスプレッドシートを開きます。</li>
+              <li>メニューの「ファイル → 変更履歴 → 変更履歴を表示」を開きます（Ctrl+Alt+Shift+H）。</li>
+              <li>案内に出ている「最後に正常に保存した時刻」と同じか、それより前の版を選びます。</li>
+              <li>「この版を復元」を押します。今の状態も変更履歴に残るので、あとから戻し直せます。</li>
+              <li>アプリに戻り、上の「シートと同期」を押して読み直します。</li>
+            </ol>
+          </details>
+          <ol class="data-health-log" id="dataHealthLog"></ol>
+        </div>
+        <div class="settings-group">
+          <h3>形式変更のバックアップ</h3>
+          <p class="settings-panel-intro">アプリの更新でデータの形式が変わる前に、年次管理ファイルを丸ごとコピーしたものです。保存先フォルダ内の「バックアップ」フォルダにあり、年次管理ファイルごとに新しい3件を残して古いものは自動でゴミ箱に移します。削除するとDriveのゴミ箱に移り、30日以内ならDriveから戻せます。</p>
+          <p class="settings-summary" id="schemaBackupSummary">バックアップを確認しています…</p>
+          <div class="backup-list" id="schemaBackupList"></div>
+          <div class="settings-panel-actions"><md-outlined-button class="ghost-button" id="deleteAllSchemaBackups" type="button" disabled>すべて削除</md-outlined-button></div>
+        </div>
+      </section>
+      <section class="settings-panel" id="settingsPanelCalendar" role="region" aria-labelledby="settingsTabCalendar" data-settings-panel="calendar" hidden>
+        <h2>Googleカレンダー</h2>
+        <p class="settings-panel-intro">週予定や実績に読み込むカレンダーを選びます。選択が空の場合はメインカレンダーを使用します。</p>
+        <div class="settings-group"><h3>読み込むカレンダー</h3>
+        <p class="settings-summary" id="calendarSelectionSummary">カレンダー一覧を読み込んでいます…</p>
+        <div class="settings-panel-actions">
+          <md-outlined-button class="ghost-button" id="reloadPlanningCalendars" type="button">カレンダー一覧を更新</md-outlined-button>
+        </div>
+        <div class="candidate-list" id="calendarSourceList"></div>
+        </div>
+        <div class="settings-group"><h3>予定への反映</h3>
+        <p class="settings-panel-intro">選択したカレンダーは、設定を保存すると反映されます。</p>
+        <md-outlined-button class="ghost-button" id="refreshPlannerCalendar" type="button">表示中の週を再読み込み</md-outlined-button>
+        </div>
+        <div class="settings-panel-actions"><md-filled-button class="primary-button" id="saveCalendarSettings" type="button">カレンダー設定を保存</md-filled-button></div>
+      </section>
+      <section class="settings-panel" id="settingsPanelGoogleTasks" role="region" aria-labelledby="settingsTabGoogleTasks" data-settings-panel="googleTasks" hidden>
+        <h2 id="googleTasksSettingsTitle">Google Tasks</h2>
+        <p class="settings-panel-intro">同期する課題とGoogle Tasksのタスクリストを設定します。</p>
+        <div class="google-tasks-settings-fields">
+          <div class="settings-group"><h3>連携と同期方法</h3>
+          <div class="settings-visibility-list">
+          <div class="settings-check-row"><md-switch aria-label="Google Tasks連携を有効にする" id="googleTasksEnabled"></md-switch><span><strong>Google Tasks連携を有効にする</strong><small>オフの間は手動同期・自動同期とも実行しません。</small></span></div>
+          <div class="settings-check-row"><md-switch aria-label="自動同期する" id="googleTasksAutoSync"></md-switch><span><strong>自動同期する</strong><small>オンにすると、アプリ起動時と日次・予定・プロジェクトの保存後に同期します。アプリを閉じている間の定期同期は行いません。</small></span></div>
+          </div></div>
+          <div class="settings-group"><h3>同期先と対象</h3>
+          <label class="settings-field-label">
+            <span class="google-tasks-list-label"><span>同期先のタスクリスト</span><md-outlined-button class="ghost-button" id="reloadGoogleTasksLists" type="button">一覧を更新</md-outlined-button></span>
+            <md-outlined-select class="field" id="googleTasksTargetList" quick>
+              <md-select-option value="" selected><div slot="headline">リストを選択してください</div></md-select-option>
+            </md-outlined-select>
+          </label>
+          <md-outlined-text-field class="field" id="googleTasksNewListTitle" label="新しいタスクリスト名" maxlength="100" value="まとめて工数管理さん（進行中課題）" hidden></md-outlined-text-field>
+          <p class="google-tasks-scope-note">同期するのは予定の課題だけです。日次だけの作業とカレンダー実績は含みません。完了した予定は Google Tasks でも完了になり、未完了の一覧から消えます。対象月は、プロジェクト画面なら表示中の月、それ以外なら今月です。</p>
+          </div>
+          <div class="settings-group"><h3>同期状況</h3>
+          <p class="settings-panel-intro">連携・同期先の変更は、設定を保存すると反映されます。</p>
+          <p class="settings-summary" id="googleTasksSyncStatus">Google Tasks連携はオフです</p>
+          <div class="settings-panel-actions"><md-outlined-button class="ghost-button" id="syncProjectIssuesGoogleTasks" type="button" disabled>今すぐ同期</md-outlined-button><md-filled-button class="primary-button" id="saveGoogleTasksSettings" type="button">Google Tasks設定を保存</md-filled-button></div>
+          </div>
+        </div>
+      </section>
+      <section class="settings-panel" id="settingsPanelBacklog" role="region" aria-labelledby="settingsTabBacklog" data-settings-panel="backlog" hidden>
+        <h2>Backlog</h2>
+        <p class="settings-panel-intro">自分が担当する未完了課題を選んで週予定へ追加します。</p>
+        <div class="backlog-connection-fields">
+          <md-outlined-text-field class="field" id="backlogSpaceUrl" label="スペースURL" type="url" placeholder="https://スペース名.backlog.jp" autocomplete="off"></md-outlined-text-field>
+          <md-outlined-text-field class="field" id="backlogApiKey" label="APIキー" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true"></md-outlined-text-field>
+          <md-text-button id="editBacklogApiKey" type="button" hidden>APIキーを変更</md-text-button>
+          <md-text-button id="cancelBacklogApiKeyEdit" type="button" hidden>変更をやめる</md-text-button>
+          <p>APIキーはBacklogの個人設定から発行できます。登録したキーは本人だけの設定に保存します。</p>
+          <a id="authorizeBacklog" target="_blank" rel="noopener noreferrer" hidden>Googleの接続権限を許可</a>
+          <div class="settings-action-row"><md-filled-button id="saveBacklogSettings" type="button">接続を確認して保存</md-filled-button><md-text-button id="clearBacklogSettings" type="button">接続設定を削除</md-text-button></div>
+          <p id="backlogConnectionStatus" role="status">未設定</p>
+        </div>
+        <div class="settings-group backlog-project-map">
+          <h3>プロジェクトの割り当て</h3>
+          <p>Backlogのプロジェクトごとに、このアプリのプロジェクトを選びます。課題を予定に追加するときに、自動で割り当てます。</p>
+          <div class="settings-action-row"><md-text-button id="loadBacklogProjects" type="button">一覧を更新</md-text-button><span id="backlogProjectMapStatus" role="status"></span></div>
+          <div id="backlogProjectMapList" class="backlog-project-map-list"></div>
+        </div>
+      </section>
+
+      <section class="settings-panel" id="settingsPanelWork" role="region" aria-labelledby="settingsTabWork" data-settings-panel="work" hidden>
+        <h2>勤務時間</h2>
+        <p class="settings-panel-intro">週・月・プロジェクトの稼働時間と、予定の空き時間の計算に使います。週の画面で日ごとに変えた稼働時間は、そちらが優先されます。本人の設定として保存され、変えるとすぐ保存します。</p>
+        <div class="settings-group"><h3>1日の稼働時間</h3>
+        <md-outlined-text-field class="field away-minutes-field" id="workdayDefaultHours" type="number" min="0.25" max="24" step="0.25" label="勤務日1日の稼働時間" suffix-text="時間" supporting-text="標準は8時間です（0より大きく24以下）"></md-outlined-text-field>
+        </div>
+        <div class="settings-group"><h3>勤務する曜日</h3>
+        <p class="settings-panel-intro">選んでいない曜日の稼働時間は0hになります。</p>
+        <div class="workday-weekday-list" id="workdayWeekdayList"></div>
+        </div>
+        <div class="settings-group"><h3>勤務時間帯</h3>
+        <p class="settings-panel-intro">この時間帯に重なるカレンダーの予定を、会議として稼働時間から差し引きます。</p>
+        <div class="workday-time-range"><md-outlined-select class="field" id="workdayStart" label="始業"></md-outlined-select><span aria-hidden="true">〜</span><md-outlined-select class="field" id="workdayEnd" label="終業"></md-outlined-select></div>
+        </div>
+      </section>
+      <section class="settings-panel" id="settingsPanelDisplay" role="region" aria-labelledby="settingsTabDisplay" data-settings-panel="display" hidden>
+        <h2>表示・操作</h2>
+        <p class="settings-panel-intro">起動時の画面、新しい作業のプロジェクト、入力の刻み、シートの自動読み直し、完了状態の同期、日タブの共有テキスト、ショートカットキー、タイマーの離席判定を設定します。この画面の設定は、このブラウザに保存されます（完了状態の同期を除く）。</p>
+        <div class="settings-group"><h3>起動時に開く画面</h3>
+        <md-outlined-select class="field settings-select-field" id="startupView" label="アプリを開いたときの画面"></md-outlined-select>
+        </div>
+        <div class="settings-group"><h3>新しい作業のプロジェクト</h3>
+        <p class="settings-panel-intro">予定を追加したときと、今日だけの作業に最初から入るプロジェクトです。</p>
+        <md-outlined-select class="field settings-select-field" id="defaultProjectAssign" label="プロジェクト" aria-label="新しい作業の初期プロジェクト"><md-select-option value=""><div slot="headline">未設定</div></md-select-option></md-outlined-select>
+        </div>
+        <div class="settings-group"><h3>実績の入力の刻み</h3>
+        <p class="settings-panel-intro">日の画面などにある −・＋ ボタンで増減する幅です。直接入力するときは、これまでどおり0.25h単位で入れられます。</p>
+        <md-outlined-select class="field settings-select-field" id="hoursStep" label="−・＋ で増減する幅"></md-outlined-select>
+        </div>
+        <div class="settings-group"><h3>シートの自動読み直し</h3>
+          <div class="settings-check-row"><md-switch aria-label="シートの変更を自動で読み直す" id="externalEditWatch"></md-switch><span><strong>シートの変更を自動で読み直す</strong><small>AIや人がスプレッドシートを直接書き換えたとき、アプリを開いている間は1分ごとと、タブに戻ったときに確かめて読み直します。オフにすると「保存先・データ」の「シートと同期」を押したときだけ読み直します。</small></span></div>
+        </div>
+        <div class="settings-group"><h3>予定と実績の完了状態</h3>
+          <div class="settings-check-row"><md-switch aria-label="予定と実績の完了状態を同期する" id="planActualCompletionSync"></md-switch><span><strong>予定と実績の完了状態を同期する</strong><small>標準はオフです。オフでは、それぞれで完了・未完了を選べます。オンにすると、実績の完了・取り消しを予定にも反映します。切り替えると本人の設定に保存されます。</small></span></div>
+        </div>
+        <div class="settings-group"><h3>日タブの共有テキスト</h3>
+          <div class="settings-check-row"><md-switch aria-label="日タブに共有テキストを表示する" id="dailyShareEnabled"></md-switch><span><strong>日タブに共有テキストを表示する</strong><small>今日の実績から、朝会や日報に貼る文を作る欄です。オフにすると日タブから隠れます。</small></span></div>
+        </div>
+        <div class="settings-group"><h3>ショートカットキー</h3>
+        <p class="settings-panel-intro">入力中やダイアログを開いている間は反応しません。キーの欄を押して、割り当てたい英字か数字を1つ押してください（Backspaceで解除、Escでやめる）。</p>
+        <div class="settings-check-row"><md-switch aria-label="ショートカットキーを使う" id="shortcutsEnabled"></md-switch><span><strong>ショートカットキーを使う</strong><small>オフにすると、すべてのキー操作を止めます。</small></span></div>
+        <div class="shortcut-list" id="shortcutList"></div>
+        <h4 class="shortcut-fixed-title">変えられないキー</h4>
+        <div class="shortcut-list is-fixed" id="shortcutFixedList">
+          <div class="shortcut-row"><span>前後の期間へ移動（日・週・月）</span><kbd class="shortcut-fixed-key">← →</kbd></div>
+          <div class="shortcut-row"><span>予定の行を上下に移動（週・月）</span><kbd class="shortcut-fixed-key">↑ ↓</kbd></div>
+          <div class="shortcut-row"><span>行の中を移動（名前 → 期間の帯 → 実績）</span><kbd class="shortcut-fixed-key">Tab</kbd></div>
+          <div class="shortcut-row"><span>選んだ行・帯・実績を開く／編集</span><kbd class="shortcut-fixed-key">Enter</kbd></div>
+          <div class="shortcut-row"><span>閉じる・取り消し</span><kbd class="shortcut-fixed-key">Esc</kbd></div>
+          <div class="shortcut-row"><span>今すぐ保存</span><kbd class="shortcut-fixed-key">Ctrl+S</kbd></div>
+          <div class="shortcut-row"><span>元に戻す・やり直す</span><kbd class="shortcut-fixed-key">Ctrl+Z / Ctrl+Y</kbd></div>
+          <div class="shortcut-row"><span>備考の確定（備考の入力パネル）</span><kbd class="shortcut-fixed-key">Ctrl+Enter</kbd></div>
+        </div>
+        <div class="settings-panel-actions"><md-outlined-button class="ghost-button" id="resetShortcuts" type="button">標準に戻す</md-outlined-button></div>
+        </div>
+        <div class="settings-group"><h3>タイマーの離席判定</h3>
+        <p class="settings-panel-intro">計測中にパソコンを閉じたり、操作しない時間が続いたりしたとき、戻ってきたら休憩にするか確認します。</p>
+        <div class="settings-visibility-list">
+          <div class="settings-check-row"><md-switch aria-label="離席を判定する" id="awayDetectionEnabled"></md-switch><span><strong>離席を判定する</strong><small>オフにすると、離れていた時間もそのまま計測し続けます。</small></span></div>
+        </div>
+        <md-outlined-text-field class="field away-minutes-field" id="awayDetectionMinutes" type="number" min="1" max="240" step="1" label="離席とみなすまでの時間" suffix-text="分" supporting-text="この時間以上離れていたときだけ確認します（1〜240分）"></md-outlined-text-field>
+        </div>
+      </section>
+      <section class="settings-panel" id="settingsPanelAdvanced" role="region" aria-labelledby="settingsTabAdvanced" data-settings-panel="advanced" hidden>
+        <h2>詳細設定</h2>
+        <p class="settings-panel-intro">アプリのスクリプトを確認・編集します。</p>
+        <div class="settings-group"><h3>Apps Script</h3>
+          <p class="settings-panel-intro">このアプリのGoogle Apps Scriptプロジェクトを開きます。</p>
+          <md-outlined-button class="ghost-button" id="openGas" type="button">Apps Scriptを開く</md-outlined-button>
+        </div>
+      </section>
+      </div>
+    </div>
+    <div slot="actions" class="dialog-actions app-settings-footer"><md-outlined-button class="ghost-button" id="closeAppSettingsFooter" type="button">閉じる</md-outlined-button></div>
+  </md-dialog>
+  <div class="busy" id="busy" hidden><div class="busy-card"><md-circular-progress indeterminate aria-label="読み込み中"></md-circular-progress><span id="busyText">読み込んでいます…</span></div></div>
+  <!-- UI_SCRIPT -->
+</body>
+</html>

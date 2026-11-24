@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm run ui:build)",
+      "Bash(npm run gas:push)",
+      "Bash(pkill chrome)",
+      "Bash(pkill -f preview-server.js)"
+    ]
+  }
+}

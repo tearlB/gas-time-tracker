@@ -1,0 +1,103 @@
+/* Shared application components retain Material's ripple, focus and disabled states. */
+/* Segmented buttons own selection, keyboard activation, focus and ripple.
+   The shared sliding background is the calendar-specific presentation. */
+md-outlined-segmented-button-set.calendar-modes {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: 204px;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  --md-outlined-segmented-button-label-text-font: var(--font);
+  --md-outlined-segmented-button-outline-color: transparent;
+  --md-outlined-segmented-button-selected-container-color: transparent;
+  --md-outlined-segmented-button-selected-label-text-color: var(--blue-ink);
+  --md-outlined-segmented-button-hover-state-layer-opacity: 0;
+  --md-outlined-segmented-button-pressed-state-layer-opacity: 0;
+  --md-outlined-segmented-button-selected-hover-label-text-color: var(--blue-ink);
+  --md-outlined-segmented-button-unselected-hover-label-text-color: var(--blue-ink);
+}
+.calendar-modes::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 3);
+  border-radius: var(--radius-pill);
+  background: var(--blue-fill);
+  pointer-events: none;
+  transform: translateX(0);
+  transition: transform 220ms cubic-bezier(.2, 0, 0, 1);
+}
+.calendar-modes[data-mode="week"]::before { transform: translateX(100%); }
+.calendar-modes[data-mode="month"]::before { transform: translateX(200%); }
+/* プロジェクト画面ではどちらも選択中に見せない（押すとカレンダーへ戻る）。 */
+.calendar-modes[data-mode="none"]::before { opacity: 0; }
+.calendar-modes md-outlined-segmented-button {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  border-radius: var(--radius-pill);
+}
+.calendar-modes md-outlined-segmented-button::part(focus-ring) { --md-focus-ring-shape: var(--radius-pill); }
+@media (prefers-reduced-motion: reduce) {
+  .calendar-modes::before { transition: none; }
+}
+.ui-choice-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+md-filter-chip.ui-choice {
+  --md-filter-chip-container-height: 40px;
+  --md-filter-chip-label-text-font: var(--font);
+  --md-filter-chip-label-text-size: .8125rem;
+  min-width: 72px;
+}
+md-filled-tonal-button.ui-navigation-item {
+  --md-filled-tonal-button-container-color: transparent;
+  --md-filled-tonal-button-label-text-color: var(--muted);
+  --md-filled-tonal-button-label-text-size: .8125rem;
+  --md-filled-tonal-button-leading-space: 12px;
+  --md-filled-tonal-button-trailing-space: 12px;
+  --md-filled-tonal-button-container-shape: 10px;
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+}
+md-filled-tonal-button.ui-navigation-item.is-active {
+  --md-filled-tonal-button-container-color: var(--blue-tint);
+  --md-filled-tonal-button-label-text-color: var(--blue-ink);
+}
+.ui-navigation-label { display: block; width: var(--ui-navigation-label-width, 144px); min-width: 0; white-space: normal; overflow-wrap: anywhere; text-align: left; line-height: 1.5; }
+.dialog-headline-copy { min-width: 0; }
+.dialog-eyebrow { display: block; color: var(--muted); font-size: .75rem; }
+/* A 40px state layer plus wrapper margins provides a 48px interaction footprint. */
+md-icon-button.week-add,
+md-icon-button.today-step {
+  --md-icon-button-state-layer-width: 40px;
+  --md-icon-button-state-layer-height: 40px;
+  --md-icon-button-icon-size: 20px;
+}
+/* Dense weekly summaries use compact controls, without adding a 48px row. */
+.span-name md-icon-button.span-priority-handle {
+  width: 12px;
+  height: 100%;
+  --md-icon-button-state-layer-width: 12px;
+  --md-icon-button-state-layer-height: 100%;
+  --md-icon-button-state-layer-shape: 0;
+  --md-icon-button-icon-size: 16px;
+}
+.span-name md-icon-button.span-subtask-add {
+  --md-icon-button-state-layer-width: 24px;
+  --md-icon-button-state-layer-height: 24px;
+  --md-icon-button-icon-size: 18px;
+}
+@media (max-width: 600px) {
+  md-filled-tonal-button.ui-navigation-item {
+    --ui-navigation-label-width: 86px;
+    --md-filled-tonal-button-label-text-size: .75rem;
+    --md-filled-tonal-button-leading-space: 8px;
+    --md-filled-tonal-button-trailing-space: 8px;
+  }
+}
+md-filled-tonal-button.ui-navigation-item[hidden] { display: none; }

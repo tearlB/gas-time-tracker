@@ -1,0 +1,26 @@
+{
+  "name": "matomete-kousu-kanri-san",
+  "private": true,
+  "scripts": {
+    "ui:build": "node scripts/build-ui.js",
+    "ui:check": "node scripts/build-ui.js --check",
+    "test": "npm run ui:check && node --test tests/*.test.js",
+    "preview": "npm run ui:build && node scripts/preview-launcher.js",
+    "preview:stop": "node scripts/preview-stop.js",
+    "gas:install": "npm --prefix gas install",
+    "gas:login": "bash scripts/gas-login.sh",
+    "gas:login:force": "bash scripts/gas-login.sh --force",
+    "gas:create": "bash scripts/gas-create.sh",
+    "gas:push": "bash scripts/gas-push.sh",
+    "gas:deploy": "bash scripts/gas-deploy.sh",
+    "gas:rollback": "bash scripts/gas-rollback.sh",
+    "gas:restore": "bash scripts/gas-restore.sh"
+  },
+  "dependencies": {
+    "@material/web": "^2.5.0",
+    "gsap": "^3.15.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

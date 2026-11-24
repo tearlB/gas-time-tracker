@@ -1,0 +1,2869 @@
+/* ---------- daily task board ---------- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.task-board { overflow-x: auto; }
+.task-table { width: 100%; min-width: 1120px; border-collapse: collapse; table-layout: fixed; }
+.task-table .col-handle { width: 32px; }
+.task-table .col-done { width: 40px; }
+.task-table .col-origin { width: 96px; }
+.task-table .col-project { width: 200px; }
+.task-table .col-num { width: 88px; }
+.task-table .col-today { width: 180px; }
+.task-table .col-remaining { width: 88px; }
+.daily-remaining { display: block; margin: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.daily-remaining[hidden] { display: none; }
+.daily-remaining.is-over { color: var(--danger); }
+.daily-sheet > .daily-remaining { margin: -8px 0 0; text-align: center; }
+.daily-sheet > .daily-remaining::before { content: '残り工数 '; }
+.daily-sheet > .daily-remaining::after { content: ' h'; }
+.today-stepper { display: inline-flex; align-items: center; justify-content: center; gap: 2px; vertical-align: middle; }
+
+md-icon-button.today-step[disabled] { opacity: .38; }
+.task-table .col-status { width: 96px; }
+/* 48pxの操作領域を2つと、右側の余白8pxを確保する。 */
+.task-table .col-actions { width: 104px; }
+.task-board-head th,
+.work-card td {
+  height: 64px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  text-align: left;
+}
+.task-board-head th {
+  height: 48px;
+  color: var(--faint);
+  background: var(--surface-2);
+  border-bottom-color: var(--line-strong);
+  font-size: .75rem;
+  font-weight: 500;
+  letter-spacing: .01em;
+}
+.task-board-head th.task-col-handle,
+.work-card td.task-col-handle,
+.task-board-head th.task-col-done,
+.work-card td.task-col-done { padding-right: 4px; padding-left: 4px; text-align: center; }
+.task-board-head th.task-col-origin,
+.work-card td.task-col-origin,
+.task-board-head th.task-col-status,
+.work-card td.task-col-status { text-align: center; }
+.task-board-head th.task-col-num,
+.work-card td.task-col-num { padding-right: 8px; padding-left: 8px; text-align: center; }
+.task-col-num input.field,
+.task-table .synced-hours {
+  width: 72px;
+  height: 32px;
+  margin-right: auto;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  line-height: 30px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.task-col-num input.field {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+.task-table input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.task-table input[type="number"]::-webkit-outer-spin-button,
+.task-table input[type="number"]::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
+.synced-hours {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  line-height: 30px;
+}
+.empty-row td { padding: 0; border-bottom: 0; }
+.work-card td { background: var(--surface); }
+.work-card:hover td,
+.work-card:focus-within td { background: var(--surface-2); }
+.task-table:has(.task-list.is-reordering) { border-collapse: separate; border-spacing: 0; }
+.task-list.is-reordering { cursor: grabbing; }
+.work-card.is-dragging { position: relative; z-index: 3; }
+.task-list.is-reordering .work-card:hover td,
+.task-list.is-reordering .work-card:focus-within td { background: var(--surface); }
+.task-list.is-reordering .work-card.is-dragging td,
+.task-list.is-reordering .work-card.is-dragging:hover td { background: var(--blue-fill); }
+.daily-status,
+.task-origin { min-height: 24px; padding: 0 8px; font-size: .75rem; line-height: 24px; }
+.daily-status { pointer-events: none; }
+.task-origin.is-new,
+.task-origin.is-resume { color: var(--blue-ink); background: var(--blue-fill); }
+.task-origin.is-calendar { color: var(--meet); background: var(--meet-fill); }
+.task-origin.is-interrupt { color: var(--interrupt); background: var(--interrupt-fill); }
+@property --recorded-hours-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: var(--ink);
+}
+@property --recorded-hours-line {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: var(--line-strong);
+}
+.today-cell { position: relative; }
+.today-cell .recorded-delta {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  color: var(--blue);
+  font-size: .8125rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+}
+.work-card.is-recorded .today-value {
+  --recorded-hours-line: var(--blue);
+  animation-delay: var(--recorded-delay, 0ms);
+}
+@keyframes recorded-field {
+  0%, 48% { --recorded-hours-line: var(--blue); }
+  76%, 100% { --recorded-hours-color: var(--ink); --recorded-hours-line: var(--line-strong); }
+}
+@keyframes recorded-delta {
+  0% { opacity: 0; transform: translate(-50%, -46%); }
+  18% { opacity: 1; }
+  52% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, calc(-50% - 12px)); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .work-card.is-recorded .today-value { animation: recorded-field .7s linear var(--recorded-delay, 0ms) forwards; }
+  .recorded-delta { animation: recorded-delta .7s linear var(--recorded-delay, 0ms) forwards; }
+}
+.work-card.is-calendar-interrupt td { border-bottom-style: solid; }
+.task-issue-cell { min-width: 0; }
+.drag-handle {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  vertical-align: middle;
+  cursor: grab;
+  touch-action: none;
+}
+.drag-handle:active,
+.work-card.is-dragging .drag-handle { cursor: grabbing; }
+.task-table .drag-handle { width: 32px; --md-icon-button-state-layer-width: 32px; }
+.task-issue-wrap { display: flex; position: relative; min-width: 0; flex-direction: column; }
+.task-field-label { display: none; }
+.task-issue-text {
+  display: flex;
+  min-width: 0;
+  min-height: 40px;
+  flex-direction: column;
+  justify-content: center;
+}
+.task-issue-text strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .875rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+.task-issue-text small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+  font-size: .75rem;
+}
+.task-issue-text.is-empty { color: var(--faint); font-weight: 400; }
+.daily-plan-link { display: block; max-width: 100%; overflow: hidden; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.daily-plan-link:hover { color: var(--blue); text-decoration: underline; }
+.daily-plan-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.task-table .field,
+.task-table .synced-hours { font-size: .875rem; }
+.task-project-cell .field { height: 40px; min-width: 0; }
+.today-cell input.field { height: 32px; min-width: 0; padding: 2px 8px 0; line-height: 28px; }
+.daily-project-inherited {
+  display: block;
+  height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: .875rem;
+  line-height: 38px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.daily-project-inherited.is-empty { color: var(--faint); }
+.interrupt-name-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  cursor: text;
+}
+input.field.interrupt-name {
+  width: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 22px);
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font-size: .875rem;
+  font-weight: 500;
+  line-height: 40px;
+  cursor: text;
+  field-sizing: content;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--interrupt) 55%, var(--line));
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+input.field.interrupt-name::placeholder { color: var(--faint); font-weight: 400; }
+input.field.interrupt-name:hover,
+input.field.interrupt-name:focus {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.interrupt-name-field:hover input.field.interrupt-name,
+.interrupt-name-field:focus-within input.field.interrupt-name {
+  text-decoration-color: var(--interrupt);
+  text-decoration-thickness: 2px;
+}
+.interrupt-name-edit {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  overflow: hidden;
+  color: var(--interrupt);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+  opacity: .8;
+}
+.interrupt-name-field:hover .interrupt-name-edit,
+.interrupt-name-field:focus-within .interrupt-name-edit { opacity: 1; }
+/* カレンダー由来の今日だけは、予定の課題名と親タスク名と同じ2段組みにそろえる */
+.task-issue-wrap:has(.interrupt-calendar-source) { justify-content: center; }
+.task-issue-wrap:has(.interrupt-calendar-source) input.field.interrupt-name { height: 20px; line-height: 20px; text-underline-offset: 3px; }
+.interrupt-calendar-source {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  margin-top: 2px;
+  color: var(--faint);
+  font-size: .75rem;
+  line-height: 1.25;
+}
+.interrupt-calendar-source > .interrupt-calendar-source-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-revert { display: inline-grid; flex: 0 0 22px; width: 22px; height: 22px; margin: -3px 0 -3px 4px; padding: 0; place-items: center; border: 0; border-radius: 50%; color: var(--muted); background: transparent; cursor: pointer; }
+.interrupt-calendar-source .calendar-revert .material-symbols-outlined { flex: none; width: auto; color: inherit; font-size: 16px; }
+.calendar-revert:hover { color: var(--blue); background: var(--blue-fill); }
+.calendar-revert:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.interrupt-calendar-source .material-symbols-outlined { flex: 0 0 13px; width: 13px; overflow: hidden; color: var(--meet); font-size: 13px; }
+.task-board-head th.task-col-actions,
+.work-card td.row-actions { padding-right: 8px; padding-left: 0; text-align: right; }
+.row-actions { white-space: nowrap; }
+.add-row-group { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); border-radius: 0 0 var(--radius) var(--radius); overflow: hidden; }
+/* 実績の下の追加ボタン。＋と文字をひとまとまりにして、それぞれのボタンの中央に置く。 */
+button.add-row { display: flex; width: 100%; height: 52px; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 0; color: var(--blue); background: transparent; font: inherit; font-size: .875rem; font-weight: 500; text-align: center; cursor: pointer; }
+button.add-row:hover { background: var(--blue-tint); }
+button.add-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+button.add-row .material-symbols-outlined { font-size: 20px; }
+button.add-row.is-side { border-left: 1px solid var(--line); }
+
+.report-panel { padding: 16px; }
+.report-panel md-outlined-text-field {
+  width: 100%;
+  min-height: 120px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  --md-outlined-text-field-input-text-size: .8125rem;
+  --md-outlined-text-field-input-text-line-height: 1.375rem;
+}
+.report-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+/* ---------- top edit toolbar ---------- */
+.save-dock {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.save-dock.is-dirty .save-dock-button { --md-icon-button-icon-color: var(--blue); }
+/* 保存中も雲のアイコンの場所は確保し、その上に回る表示を重ねる（幅が変わって元に戻す・やり直すがずれないように）。 */
+.save-dock { position: relative; }
+.save-dock.is-saving .save-dock-button { visibility: hidden; }
+.save-dock .save-spinner { position: absolute; top: 50%; right: 14px; margin: -10px 0 0; }
+/* 表示の切り替え（日・週・月・プロジェクト）。 */
+.view-menu-wrap { position: relative; flex: 0 0 auto; margin-left: 8px; }
+#viewMenu {
+  --md-menu-container-color: var(--surface);
+  --md-menu-item-container-color: var(--surface);
+  --md-menu-item-selected-container-color: var(--blue-fill);
+  --md-menu-item-one-line-container-height: 40px;
+  --md-menu-item-label-text-size: .875rem;
+  min-width: 160px;
+}
+md-outlined-button.view-menu-button {
+  --md-outlined-button-container-height: var(--control-height-compact);
+  --md-outlined-button-container-shape: var(--radius-pill);
+  --md-outlined-button-outline-color: var(--line-strong);
+  --md-outlined-button-label-text-color: var(--ink);
+  --md-outlined-button-icon-color: var(--muted);
+  --md-outlined-button-with-trailing-icon-leading-space: 20px;
+  --md-outlined-button-with-trailing-icon-trailing-space: 12px;
+  min-width: 0;
+  --md-outlined-button-icon-size: 18px;
+}
+.history-actions { display: flex; gap: 2px; }
+.history-actions .ghost-button { display: inline-grid; min-width: 36px; width: 36px; height: 36px; place-items: center; padding: 0; border-color: transparent; background: transparent; }
+.history-actions .ghost-button:hover { border-color: transparent; background: var(--control-hover); }
+.save-dock.is-dirty { background: transparent; }
+.save-spinner {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin-left: 6px;
+}
+body.is-autosaving .sidebar::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background:
+    linear-gradient(90deg, transparent, var(--blue), transparent) 0 0 / 36% 100% no-repeat,
+    var(--blue-fill);
+  animation: save-sweep 1.05s ease-in-out infinite;
+}
+@keyframes save-sweep {
+  from { background-position: -40% 0, 0 0; }
+  to { background-position: 140% 0, 0 0; }
+}
+.plan-save.is-saving { color: var(--blue); }
+.plan-save.is-saving #weekBoardHint::before {
+  content: '';
+  display: inline-block;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid color-mix(in srgb, var(--blue) 25%, transparent);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .save-spinner,
+  body.is-autosaving .sidebar::after,
+  .plan-save.is-saving #weekBoardHint::before { animation: none; }
+  body.is-autosaving .sidebar::after { background: var(--blue); }
+}
+.toolbar-divider { width: 1px; height: 24px; margin: 0 4px; background: var(--line-strong); }
+.save-dock.is-history-hidden .history-actions, .save-dock.is-history-hidden .toolbar-divider { display: none; }
+
+/* ---------- timer ---------- */
+.timer-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+  min-height: 64px;
+  padding: 8px 8px 8px 16px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--blue-fill);
+  color: var(--blue-ink);
+}
+.timer-ribbon.is-paused { background: var(--warn-fill); color: var(--ink); }
+.timer-ribbon.is-idle { background: var(--surface); color: var(--faint); }
+.timer-ribbon.is-idle .timer-leading { color: var(--faint); background: var(--surface-2); }
+.timer-ribbon.is-idle .timer-copy strong { color: var(--muted); }
+.timer-ribbon.is-idle .timer-clock,
+.timer-ribbon.is-idle .timer-actions { visibility: hidden; }
+.timer-leading {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--blue);
+  background: var(--surface);
+}
+.timer-ribbon.is-paused .timer-leading { color: var(--warn); }
+.timer-leading .material-symbols-outlined { font-size: 24px; }
+.timer-trailing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.timer-actions {
+  display: flex;
+  align-items: center;
+}
+.timer-icon {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+}
+.timer-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--blue); animation: pulse 1.4s infinite; }
+.timer-copy { min-width: 0; flex: 1 1 140px; }
+.timer-copy small { display: block; color: var(--blue); font-size: .75rem; font-weight: 500; line-height: 1.2; }
+.timer-ribbon.is-paused .timer-copy small { color: var(--warn); }
+.timer-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: .875rem; font-weight: 500; line-height: 1.4; }
+.timer-clock { color: var(--ink); font-size: 1.125rem; font-weight: 500; line-height: 1; letter-spacing: 0; }
+.timer-presence { display: inline-flex; flex: 0 1 auto; min-width: 104px; padding: 0; }
+.timer-presence-content { display: flex; width: min(280px, 24vw); min-width: 80px; align-items: center; gap: 8px; }
+.timer-presence .timer-dot { width: 8px; height: 8px; flex: 0 0 8px; animation: none; }
+.timer-presence.is-paused .timer-dot { background: var(--warn); }
+.timer-presence-task { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timer-presence-meta { flex: 0 0 auto; color: var(--faint); font-weight: 400; }
+.timer-presence-clock { flex: 0 0 auto; color: var(--ink); font-family: var(--mono); font-size: .875rem; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@keyframes pulse { 50% { opacity: .3; } }
+
+/* ---------- period controls ---------- */
+.period-command { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* ---------- plan board ---------- */
+.plan-board { overflow: hidden; }
+.plan-board-head, .variance-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+}
+.plan-board-head h2, .variance-head h2 { margin: 0; font-family: var(--display); font-size: 1rem; font-weight: 500; letter-spacing: 0; }
+.plan-board-head p, .variance-head p { margin: 3px 0 0; color: var(--faint); font-size: .8125rem; line-height: 20px; }
+/* 表の上に小数の高さの行があると、表全体が半ピクセルずれ、罫線がぼやけて固定の名前列と合わなくなる。上の行の高さは整数にそろえる。 */
+.plan-save span { line-height: 20px; }
+.plan-head-actions, .forecast-head-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.forecast-head-actions { min-width: 0; margin-left: auto; justify-content: flex-end; }
+.forecast-head-actions > md-filled-button,
+.forecast-head-actions > md-outlined-button { flex: 0 0 auto; }
+.forecast-head-actions .status-legend { padding-left: 12px; border-left: 1px solid var(--line); }
+.plan-list { display: grid; background: var(--surface); }
+.plan-item { border-bottom: 1px solid var(--line); background: var(--surface); }
+.plan-top { display: grid; grid-template-columns: minmax(220px,1.5fr) repeat(4,96px) auto; gap: 12px; align-items: end; padding: 16px 20px; }
+.plan-control label { display: block; margin: 0 0 6px; color: var(--faint); font-size: .75rem; font-weight: 500; }
+.readout {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  font-size: .8125rem;
+  font-weight: 500;
+}
+.readout.is-over { color: var(--danger); background: var(--danger-fill); }
+.plan-buttons { display: flex; gap: 8px; }
+.plan-note { padding: 0 20px 14px; }
+.actual-only-badge, .plan-kind-badge {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  background: var(--surface-3);
+  font-size: .6875rem;
+  font-weight: 500;
+}
+.plan-kind-badge.is-added { color: var(--warn); background: var(--warn-fill); }
+.plan-item:not(.is-actual-only) .actual-only-badge { display: none; }
+.plan-item.is-calendar-plan .actual-only-badge { display: inline-flex; color: var(--meet); background: var(--meet-fill); }
+.plan-item.is-actual-only .remove-plan { visibility: hidden; }
+.subtasks { border-top: 1px solid var(--line); background: var(--surface-2); }
+.subtasks-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; color: var(--faint); font-size: .75rem; font-weight: 500; }
+.subtask-list { display: grid; gap: 8px; padding: 0 20px 16px; }
+.subtask-row { display: grid; grid-template-columns: minmax(180px,1.4fr) 88px 136px 116px minmax(130px,1fr) 36px; gap: 8px; }
+.subtask-row .field { height: 36px; font-size: .8125rem; }
+.subtask-empty { padding: 12px 0; color: var(--faint); font-size: .8125rem; }
+.plan-save { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; border-top: 1px solid var(--line); color: var(--faint); font-size: .8125rem; }
+.plan-save .primary-button { display: none; }
+
+/* ---------- snackbar（Material 3 のスナックバーに合わせる） ----------
+   反転色の背景・角丸4px・本文14px。状態を色で示さず、エラーは ✕ で閉じるまで残す。 */
+.toast {
+  position: fixed;
+  z-index: 500;
+  left: 24px;
+  bottom: 24px;
+  top: auto;
+  right: auto;
+  display: flex;
+  min-height: 48px;
+  min-width: min(344px, calc(100vw - 48px));
+  max-width: min(560px, calc(100vw - 48px));
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 16px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  color: #f4eff4;
+  background: #313033;
+  box-shadow: 0 3px 5px rgba(0,0,0,.2), 0 6px 10px rgba(0,0,0,.14);
+  font-size: .875rem;
+  font-weight: 400;
+  line-height: 1.43;
+  opacity: 1;
+  transform: none;
+  transition: opacity .15s ease-out, transform .15s ease-out;
+}
+.toast.is-entering { opacity: 0; transform: translateY(8px); }
+.toast-text { flex: 1 1 auto; min-width: 0; padding: 8px 0; overflow-wrap: anywhere; }
+.toast-close {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.toast-close:hover, .toast-close:focus-visible { background: rgba(255,255,255,.12); outline: 0; }
+.toast-close .material-symbols-outlined { font-size: 20px; }
+
+.context-menu {
+  position: fixed;
+  z-index: 600;
+  min-width: 190px;
+  margin: 0;
+  padding: 8px 0;
+  list-style: none;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 2px 6px 2px rgba(60,64,67,.15), 0 1px 2px rgba(60,64,67,.3);
+}
+.context-menu-sep { height: 1px; margin: 4px 0; background: var(--line); }
+.context-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: .8125rem;
+  text-align: left;
+  cursor: pointer;
+}
+.context-menu button:hover { background: var(--surface-2); }
+.context-menu button:disabled { color: var(--line-strong); cursor: default; background: transparent; }
+
+.parent-picker {
+  position: fixed;
+  z-index: 620;
+  min-width: 240px;
+  max-width: min(400px, calc(100vw - 24px));
+  max-height: min(360px, calc(100vh - 24px));
+  overflow: auto;
+  padding: 0 0 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 2px 6px 2px rgba(60,64,67,.15), 0 1px 2px rgba(60,64,67,.3);
+}
+.parent-picker-head {
+  position: sticky;
+  top: 0;
+  padding: 10px 16px 8px;
+  color: var(--faint);
+  background: var(--surface);
+  font-size: .75rem;
+  font-weight: 500;
+  border-bottom: 1px solid var(--line);
+}
+.parent-picker-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.parent-picker-item:hover, .parent-picker-item:focus { background: var(--surface-2); }
+.parent-picker-item.is-selected { background: var(--blue-tint); }
+.parent-picker-check {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  color: var(--blue);
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.parent-picker-item-copy { min-width: 0; }
+.parent-picker-item-name { display: block; font-size: .8125rem; font-weight: 500; }
+.parent-picker-item small { display: block; margin-top: 2px; color: var(--faint); font-size: .75rem; }
+.parent-picker-empty { padding: 14px 16px; color: var(--faint); font-size: .8125rem; }
+
+/* ---------- dialogs ---------- */
+.dialog-actions, .plan-dialog-actions { flex: 0 0 auto; }
+.candidate-week, .storage-form, .plan-dialog-fields { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.dialog-help { margin: 0; padding: 0 24px 12px; color: var(--muted); font-size: .8125rem; }
+#candidateDialog .candidate-week { display: flex; flex-direction: column; max-height: min(560px, calc(100vh - 280px)); min-height: 0; overflow: hidden; }
+#candidateDialog #candidateList { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.candidate-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 12px; }
+.candidate-search { flex: 1 1 220px; min-width: 0; }
+
+.candidate-empty { margin: 24px 8px; color: var(--faint); font-size: .8125rem; text-align: center; }
+.candidate-week-head { padding: 0 0 4px; }
+.candidate-week-head strong { display: block; color: var(--ink); font-size: .875rem; font-weight: 500; }
+#candidateWeekTitle { margin: 0; color: var(--muted); font-size: .8125rem; font-weight: 400; line-height: 1.5; }
+.candidate-list { display: grid; gap: 0; align-content: start; padding: 0 0 8px; }
+#candidateList { gap: 0; padding: 0 0 8px; }
+.candidate-section { display: grid; gap: 2px; }
+.candidate-section-label,
+.candidate-older-label,
+.candidate-week-heading { margin: 0; color: var(--ink); font-size: .75rem; font-weight: 500; }
+.candidate-section-label { padding: 2px 8px 6px; }
+.candidate-older-label { margin-top: 16px; padding: 14px 8px 6px; border-top: 1px solid var(--line); }
+.candidate-week-heading { padding: 10px 8px 2px; color: var(--muted); }
+.candidate-week-block { display: grid; }
+
+.candidate {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+}
+.candidate:hover { border-color: var(--line-strong); background: var(--surface-2); }
+.candidate.is-plan { align-items: start; }
+.candidate > input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--blue); }
+.candidate strong { display: block; font-size: .875rem; font-weight: 500; }
+.candidate small { display: block; margin-top: 2px; color: var(--faint); font-size: .75rem; }
+.candidate-group { display: grid; margin: 0; }
+.candidate-group.is-open { margin: 2px 0 8px; border-radius: var(--radius-md); background: var(--surface-2); }
+.candidate-group-head { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.candidate-group-toggle { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 4px 8px 4px 4px; border: 0; border-radius: var(--radius-md); color: var(--ink); background: transparent; font: inherit; font-size: .875rem; font-weight: 500; text-align: left; cursor: pointer; }
+.candidate-group-toggle:hover, .candidate-group-toggle:focus-visible { background: var(--control-hover); outline: none; }
+.candidate-group-icon { display: grid; place-items: center; width: 24px; height: 24px; margin: 0 auto; color: var(--muted); font-size: 22px; }
+.candidate-group.is-open .candidate-group-icon { color: var(--blue); }
+.candidate-group-copy { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+.candidate-group-copy small { color: var(--faint); font-size: .75rem; font-weight: 500; }
+.candidate-group-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.candidate-group-count { color: var(--faint); font-size: .75rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.candidate-group.has-selected .candidate-group-count { color: var(--blue-ink); }
+.candidate-complete { flex: 0 0 auto; --md-text-button-label-text-color: var(--muted); --md-text-button-label-text-size: .75rem; }
+.candidate-complete:disabled { cursor: wait; opacity: .6; }
+.candidate-group-items { display: grid; margin: 0 8px 8px 22px; padding: 0 0 2px 8px; border-left: 2px solid var(--line-strong); }
+.candidate-group-items[hidden] { display: none; }
+#candidateList .candidate-group-items .candidate:hover label { background: var(--surface); }
+.candidate-group-empty { margin: 0 8px 8px 36px; padding: 10px 12px; border-radius: var(--radius-sm); color: var(--faint); background: var(--surface-2); font-size: .75rem; line-height: 1.5; }
+#candidateList .candidate { display: block; padding: 0; border: 0; border-radius: 0; background: transparent; }
+#candidateList .candidate label { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; min-height: 44px; padding: 4px 8px 4px 4px; border-radius: var(--radius-md); cursor: pointer; }
+.candidate-hours { display: grid; justify-items: end; min-width: 4.5rem; color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; line-height: 1.25; text-align: right; }
+.candidate-hours small { color: var(--faint); font-size: .6875rem; }
+#candidateList .candidate:hover label { background: var(--surface-2); }
+#candidateList .candidate.is-selected label,
+#candidateList .candidate:has(md-checkbox[checked]) label,
+#candidateList .candidate:has(input:checked) label { background: var(--blue-tint); }
+.candidate-flat { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.candidate-flat .candidate { flex: 1 1 auto; min-width: 0; }
+.candidate-week-label { flex: 0 0 auto; color: var(--faint); font-size: .75rem; font-weight: 500; }
+.candidate-period { flex: 0 0 auto; color: var(--faint); font-size: .75rem; font-weight: 500; white-space: nowrap; }
+.candidate-period.is-early { color: var(--warn); }
+.candidate-period.is-late { color: var(--danger); }
+md-filled-button#addCandidates[disabled] { opacity: .38; }
+#candidateList .candidate input { width: 18px; height: 18px; margin: 0 auto; accent-color: var(--blue); }
+#candidateList .candidate-copy { min-width: 0; }
+#candidateList .candidate strong { font-size: .875rem; font-weight: 500; }
+#candidateList .candidate small { margin-top: 2px; color: var(--muted); font-size: .75rem; }
+.candidate-tag { padding: 4px 10px; border: 0; border-radius: var(--radius-sm); color: var(--blue-ink); background: var(--blue-fill); font-size: .6875rem; }
+.daily-issue-composer {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+.daily-issue-composer-note { margin: 0; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+md-dialog#candidateDialog.is-composer-focus {
+  width: min(480px, calc(100% - 48px));
+  max-width: min(480px, calc(100% - 48px));
+}
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px 24px; border: 0; background: transparent; }
+.settings-layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); height: min(480px, calc(100dvh - 240px)); min-height: 0; overflow: hidden; }
+.settings-nav { overflow-y: auto; padding: 8px 16px 20px 0; border-right: 1px solid var(--line); }
+.settings-nav-group + .settings-nav-group { margin-top: 24px; }
+.settings-nav-label { margin: 0 12px 8px; color: var(--faint); font-size: .6875rem; font-weight: 500; letter-spacing: .04em; }
+
+.settings-details { min-width: 0; overflow-y: auto; overscroll-behavior: contain; }
+.settings-panel { min-width: 0; padding: 8px 0 20px 28px; }
+.settings-panel[hidden] { display: none; }
+.settings-panel h2 { margin: 0 0 8px; color: var(--ink); font-size: 1.125rem; font-weight: 500; line-height: 1.5; }
+.settings-panel h3 { margin: 0 0 12px; font-size: .8125rem; font-weight: 500; }
+.settings-panel-intro { margin: 0 0 20px; color: var(--faint); font-size: .75rem; line-height: 1.65; }
+.settings-group { padding: 20px 0; border-top: 1px solid var(--line); }
+.settings-group .settings-panel-intro { margin-bottom: 12px; }
+.settings-group:last-child { padding-bottom: 0; }
+.app-settings-dialog .candidate-list { padding: 8px 0 4px; }
+.settings-panel-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.settings-visibility-list { display: grid; gap: 0; }
+.settings-check-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; border: 0; background: transparent; }
+.settings-check-row + .settings-check-row { border-top: 1px solid var(--line); }
+.settings-check-row:first-child { padding-top: 0; }
+.settings-check-row:last-child { padding-bottom: 0; }
+.settings-check-row input, .settings-check-row md-switch, .settings-check-row md-checkbox { flex: 0 0 auto; margin: 1px 0 0; accent-color: var(--blue); }
+.settings-check-row md-switch { width: 52px; height: 32px; }
+.settings-check-row strong { display: block; color: var(--ink); font-size: .8125rem; font-weight: 500; }
+.away-minutes-field { display: block; width: min(100%, 300px); margin-top: 16px; }
+.settings-select-field { display: block; width: min(100%, 300px); margin-top: 8px; }
+.workday-weekday-list { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.workday-weekday-list label { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font-size: .8125rem; cursor: pointer; }
+.workday-time-range { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.workday-time-range md-outlined-select { width: 140px; min-width: 0; }
+.settings-check-row small { display: block; margin-top: 4px; color: var(--faint); font-size: .75rem; line-height: 1.6; }
+.settings-summary { margin: 0; color: var(--faint); font-size: .75rem; line-height: 1.5; }
+.data-health-result { margin: 12px 0; font-size: .8125rem; line-height: 1.6; }
+.data-health-result:empty { display: none; }
+.data-health-result p { margin: 0 0 8px; }
+.data-health-result ul { margin: 0 0 8px; padding-left: 1.2em; }
+.data-health-result .is-warning { color: var(--danger); }
+.data-health-guide { margin-top: 12px; font-size: .8125rem; line-height: 1.6; }
+.data-health-guide summary { cursor: pointer; }
+.data-health-guide ol { margin: 8px 0 0; padding-left: 1.4em; }
+.data-health-log { display: grid; gap: 4px; margin: 12px 0 0; padding: 0; list-style: none; color: var(--faint); font-size: .75rem; }
+.data-health-log li { display: grid; grid-template-columns: 6em 1fr; gap: 8px; }
+.data-health-log li.is-failed { color: var(--danger); }
+.data-health-log small { display: block; }
+.backup-list { display: grid; gap: 8px; margin: 12px 0; }
+.backup-list:empty { display: none; }
+.backup-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.backup-copy { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.backup-copy a { overflow: hidden; color: inherit; font-size: .8125rem; text-overflow: ellipsis; white-space: nowrap; }
+.backup-copy small { color: var(--faint); font-size: .75rem; }
+.settings-field-label { display: grid; gap: 10px; color: var(--faint); font-size: .75rem; }
+.app-settings-footer { border-top: 1px solid var(--line); }
+.busy { position: fixed; inset: 0; z-index: 700; display: grid; place-items: center; background: rgba(240,244,249,.7); }
+.busy-card { display: flex; align-items: center; gap: 14px; padding: 18px 24px; border: 0; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); font-size: .875rem; font-weight: 500; }
+.spinner { width: 20px; height: 20px; border: 3px solid var(--surface-3); border-top-color: var(--blue); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- variance / forecast ---------- */
+.variance-overview, .forecast-overview, .week-board { margin-bottom: 20px; overflow: hidden; }
+.variance-legend, .status-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--faint); font-size: .75rem; }
+.variance-legend span, .status-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.variance-legend span::before { content: ''; width: 16px; height: 10px; border-radius: var(--radius-xs); background: var(--plan-fill); }
+.variance-legend .is-actual::before { background: var(--actual-fill); }
+.variance-legend .is-over::before { background: var(--danger); }
+.status-legend span::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status-legend .is-ok::before { background: var(--ok); }
+.status-legend .is-alert::before { background: var(--danger); }
+.status-legend .is-ahead::before { background: var(--blue); }
+.variance-chart-head { display: grid; grid-template-columns: 200px minmax(280px, 1fr) 180px; gap: 16px; align-items: center; padding: 12px 20px 4px; color: var(--faint); font-size: .75rem; }
+.variance-chart-head span:nth-child(2) { display: flex; justify-content: space-between; }
+.variance-chart { padding: 0 20px 12px; }
+.variance-row { display: grid; grid-template-columns: 200px minmax(280px, 1fr) 180px; gap: 16px; align-items: center; min-height: 60px; border-top: 1px solid var(--line); }
+.variance-row:first-child { border-top: 0; }
+.variance-name { min-width: 0; }
+.variance-name strong { display: block; overflow: hidden; font-size: .8125rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.variance-name small { display: block; margin-top: 2px; color: var(--faint); font-size: .75rem; }
+.variance-row.is-over .variance-name small, .variance-row.is-unplanned .variance-name small { color: var(--danger); }
+.variance-track { position: relative; height: 24px; border: 0; border-radius: var(--radius-sm); background: var(--surface-3); }
+.variance-plan-bar { position: absolute; top: 4px; left: 0; height: 16px; border: 0; border-radius: var(--radius-pill); background: var(--plan-fill); }
+.variance-actual-bar { position: absolute; top: 9px; left: 0; height: 6px; border-radius: var(--radius-pill); background: var(--actual); }
+.variance-over-bar { position: absolute; top: 9px; height: 6px; border-radius: var(--radius-pill); background: var(--danger); }
+.variance-values { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+.variance-values span { color: var(--faint); font-size: .75rem; }
+.variance-values strong { color: var(--ink); font-size: .8125rem; font-weight: 500; }
+.variance-values em { grid-column: 1 / -1; color: var(--faint); font-size: .75rem; font-style: normal; }
+.variance-values em.is-over { color: var(--danger); }
+.variance-empty { padding: 48px 24px; color: var(--faint); text-align: center; font-size: .8125rem; }
+
+.forecast-scroll { overflow-x: auto; }
+.forecast-table { min-width: 100%; width: max-content; }
+.forecast-row { display: grid; grid-template-columns: 200px repeat(var(--forecast-days), 72px) 140px; min-height: 40px; border-top: 1px solid var(--line); }
+.forecast-row:first-child { border-top: 0; }
+.forecast-name { position: sticky; left: 0; z-index: 2; display: flex; min-width: 0; align-items: center; gap: 8px; padding: 6px 12px; border-right: 1px solid var(--line); background: var(--surface); }
+.forecast-name b { display: grid; width: 20px; height: 20px; flex: 0 0 20px; place-items: center; border-radius: 50%; color: var(--muted); background: var(--surface-3); font-size: .6875rem; font-weight: 500; }
+.forecast-name span { overflow: hidden; font-size: .8125rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.forecast-day { position: relative; display: grid; place-items: center; padding: 0; border: 0; border-right: 1px solid var(--line); color: var(--faint); background: var(--surface); font: inherit; font-size: .6875rem; }
+.calendar-drill-day:hover { background: var(--surface-2); }
+.forecast-day.is-weekend { background: var(--surface-2); }
+.forecast-day.is-today::after { content: ''; position: absolute; inset: 0 auto 0 50%; width: 2px; background: var(--blue); }
+.forecast-day.is-work::before { content: ''; position: absolute; top: 8px; right: 2px; height: 14px; left: 2px; border-radius: var(--radius-pill); background: var(--plan-fill); }
+.forecast-row.is-added-row .forecast-name b { color: var(--warn); background: var(--warn-fill); }
+.forecast-row.is-unallocated-row .forecast-name, .forecast-row.is-unallocated-row .forecast-result { background: var(--surface-2); }
+.forecast-day.is-unallocated::before { content: ''; position: absolute; top: 10px; right: 4px; bottom: 10px; left: 4px; border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); }
+.forecast-day.is-unallocated em { position: relative; z-index: 1; color: var(--faint); font-size: .6875rem; font-style: normal; }
+.forecast-actual-mark { position: absolute; right: 6px; bottom: 5px; left: 6px; z-index: 3; height: 4px; border-radius: var(--radius-pill); background: var(--actual); }
+.forecast-day.is-work em { position: absolute; top: 8px; z-index: 1; color: var(--blue-ink); font-size: .6875rem; font-style: normal; font-weight: 500; line-height: 14px; }
+.forecast-result { display: flex; flex-direction: column; justify-content: center; padding: 4px 12px; background: var(--surface); font-size: .75rem; }
+.forecast-result strong { font-size: .8125rem; font-weight: 500; }
+.forecast-result small { color: var(--faint); font-size: .75rem; }
+.forecast-result.is-late strong { color: var(--danger); }
+.forecast-header { min-height: 52px; color: var(--faint); background: var(--surface-2); }
+.forecast-header .forecast-name, .forecast-header .forecast-result, .forecast-header .forecast-day { background: var(--surface-2); }
+.forecast-header .forecast-day { line-height: 1.3; text-align: center; }
+.forecast-header .forecast-day strong { display: block; color: var(--ink); font-size: .8125rem; font-weight: 500; }
+.forecast-header .forecast-day small { color: var(--faint); font-size: .6875rem; }
+.forecast-header .forecast-day .capacity-edit { padding: 4px 6px; border-radius: var(--radius-sm); cursor: pointer; }
+.forecast-header .forecast-day .capacity-edit:hover { color: var(--blue); background: var(--blue-tint); }
+.forecast-header .forecast-day.has-meeting small { color: var(--meet); }
+.forecast-calendar-row { min-height: 64px; background: var(--meet-fill); }
+.forecast-calendar-row .forecast-name, .forecast-calendar-row .forecast-result { background: var(--meet-fill); }
+.forecast-calendar-cell { display: flex; min-width: 0; flex-direction: column; justify-content: center; padding: 6px; border-right: 1px solid var(--meet-line); background: var(--meet-fill); }
+.forecast-calendar-cell strong { overflow: hidden; color: var(--meet); font-size: .6875rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.forecast-calendar-cell small { overflow: hidden; color: var(--meet); font-size: .6875rem; text-overflow: ellipsis; white-space: nowrap; }
+.forecast-calendar-cell.is-empty { color: rgba(107,76,0,.5); text-align: center; }
+
+/* ---------- week calendar ---------- */
+/* 端まで来てもスクロールをブラウザに渡さない（タッチパッドの横スクロールで「戻る」が動かないように）。 */
+.week-calendar-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.month-gantt-scroll { overscroll-behavior-x: contain; }
+.week-calendar-scroll { --timeline-name-col: var(--week-name-col); }
+.month-gantt-scroll { --timeline-name-col: var(--month-name-col); }
+/* 横スクロールは吸い付かせない（吸い付きの再計算でホイール・トラックパッドの操作がガクつくため）。 */
+/* 横スクロールバーは細く目立たなくする（普通のマウスでつかんで動かせるよう、消しはしない）。 */
+.timeline-load-status { display: flex; min-height: 30px; align-items: center; gap: 8px; padding: 0 16px 6px; color: var(--muted); font-size: .75rem; }
+.timeline-periods { display: grid; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.timeline-periods > * { grid-row: 1; }
+/* 週・月の区切り。日付の区切り線のうち、週は日曜の列の右、月は月末の列の右を濃くして、上の帯の区切りと同じ位置の1本の線にする。
+   週の表示は月曜始まりなので、名前の列（1列目）の次から7列ごとの最後（8, 15, 22列目）が日曜になる。 */
+.week-span .week-head-day:nth-child(7n+8), .week-span .week-meet-day:nth-child(7n+8), .week-span .span-day:nth-child(7n+8),
+.month-gantt .is-month-end { border-right-color: var(--line-strong); }
+.timeline-periods-label { position: sticky; left: 0; z-index: 4; padding: 7px 16px; border-right: 1px solid var(--line); color: var(--muted); background: var(--surface-2); font-size: .75rem; }
+.timeline-periods-segment { min-width: 0; overflow: clip; padding: 5px 8px; text-align: center; border-right: 1px solid var(--line-strong); color: var(--muted); font-size: .75rem; white-space: nowrap; }
+.timeline-periods-caption { display: inline-flex; max-width: min(100%, calc(100vw - var(--timeline-name-col) - 48px)); min-height: 22px; align-items: center; gap: 8px; }
+.timeline-periods-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.week-context-actual, .span-context-label { color: var(--muted); font-size: .6875rem; }
+.span-context-row .span-name { cursor: default; }
+.week-span { min-width: calc(var(--week-name-col) + 1120px); }
+.week-span:has(> .empty-state) { min-width: 0; }
+.week-head-grid, .week-meet-grid, .span-row {
+  display: grid;
+  grid-template-columns: var(--week-name-col) repeat(7, minmax(160px, 1fr));
+}
+.week-head-grid { border-bottom: 1px solid var(--line); background: var(--surface); }
+.week-head-label, .week-meet-label, .span-name {
+  display: flex; min-width: 0; flex-direction: column; justify-content: center; padding: 12px 16px; border-right: 1px solid var(--line);
+}
+.week-head-label, .week-meet-label {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  color: var(--faint);
+  background: var(--surface);
+  font-size: .75rem;
+  font-weight: 500;
+}
+.week-head-day, .week-meet-day, .span-day {
+  position: relative;
+  min-width: 0;
+  padding: 10px 8px;
+  border-right: 1px solid var(--line);
+}
+.week-head-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 10px 4px 8px;
+}
+.week-head-day.is-saturday { background: #f4f8ff; }
+.week-head-day.is-sunday { background: #fff7f7; }
+.week-head-day.is-saturday .week-day-open small { color: #4267a3; }
+.week-head-day.is-sunday .week-day-open small { color: var(--danger); }
+.week-day-open { display: flex; width: 100%; flex-direction: column; align-items: center; gap: 2px; padding: 0; border: 0; background: transparent; }
+.week-day-open small {
+  color: var(--faint);
+  font-size: .6875rem;
+  font-weight: 500;
+  letter-spacing: .04em;
+  line-height: 1;
+}
+.week-day-open strong {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 1.375rem;
+  font-weight: 400;
+  line-height: 1;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+.week-day-open:hover strong { background: var(--surface-3); }
+.week-head-day.is-today .week-day-open strong { color: var(--on-fill); background: var(--blue); font-weight: 400; }
+.week-head-day.is-today .week-day-open small { color: var(--blue); font-weight: 500; }
+.week-head-day .capacity-edit {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  background: var(--surface-3);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+.week-head-day .capacity-edit b {
+  color: inherit;
+  font-size: .6875rem;
+  font-weight: 500;
+}
+.week-head-day .capacity-edit span { margin-left: 3px; color: var(--faint); font-size: .6875rem; font-weight: 400; }
+.week-head-day .capacity-edit.is-over span { color: inherit; }
+.week-head-day .capacity-edit:hover { color: var(--blue); background: var(--blue-tint); }
+.week-head-day .capacity-edit.is-rest { color: var(--faint); background: #edf0f4; }
+.week-head-day .capacity-edit.is-over { color: var(--danger); background: var(--danger-fill); }
+.week-add {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  color: var(--blue);
+  background: transparent;
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+.week-head-day:hover .week-add,
+.week-head-day:focus-within .week-add { opacity: 1; }
+.week-meet-grid { border-bottom: 1px solid var(--line); background: var(--surface); }
+.week-meet-label { overflow: hidden; }
+.week-meet-day {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 52px;
+  overflow: hidden;
+  padding: 8px 6px;
+}
+/* 予定は1件1行（22px）。 */
+.calendar-entry {
+  display: flex;
+  flex: 0 0 22px;
+  height: 22px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: .75rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.calendar-entry.is-event { color: var(--meet); background: var(--meet-fill); cursor: pointer; }
+.calendar-entry.is-event:hover { box-shadow: inset 0 0 0 1px var(--meet-line); }
+.calendar-entry.is-interrupt { color: var(--interrupt); background: var(--interrupt-fill); cursor: pointer; }
+.calendar-entry.is-interrupt:hover { box-shadow: inset 0 0 0 1px var(--interrupt-line); }
+.calendar-entry.is-event.is-calendar-variance { opacity: .95; border: 2px dashed var(--meet-line); background: transparent; }
+.calendar-entry.is-excluded { color: var(--faint); background: var(--surface-3); }
+.calendar-entry.is-excluded:hover { box-shadow: inset 0 0 0 1px var(--line-strong); }
+.calendar-entry.is-imported { opacity: .95; border: 2px dashed var(--meet-line); background: transparent; }
+.calendar-entry b, .calendar-entry small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-entry b { flex: 1 1 auto; font-weight: 500; }
+.calendar-entry-title { min-width: 0; }
+.calendar-entry.is-excluded .calendar-entry-title { text-decoration: line-through; }
+.calendar-entry small { flex: 0 0 auto; font-size: .6875rem; font-weight: 400; opacity: .8; }
+.week-meet-empty { overflow: hidden; color: var(--line-strong); font-size: .6875rem; text-overflow: ellipsis; white-space: nowrap; }
+.week-span { position: relative; }
+.daily-command[hidden], .planning-summary[hidden] { display: none; }
+.daily-mobile-total { display: none; }
+.daily-sheet[hidden], .daily-sheet-backdrop[hidden] { display: none; }
+/* 見出しの横の合計（上部の数値のまとめの代わり）。 */
+/* 「本日実績」の列見出しに添える、その日の合計。 */
+.task-head-total { margin-left: 6px; color: var(--muted); font-weight: 400; white-space: nowrap; }
+.task-head-total b { color: var(--ink); font-size: .9375rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.span-row.is-leaving { position: absolute; z-index: 5; width: 100%; pointer-events: none; }
+.span-row { --timeline-name-col: var(--week-name-col); position: relative; min-height: 72px; align-items: stretch; border-bottom: 1px solid var(--line); background-color: var(--surface); transition: none; }
+.span-row.is-done { background-color: var(--surface); }
+.span-row.is-alert { background-color: var(--surface); }
+.span-row.is-hover { --hover-tint: linear-gradient(transparent, transparent); background-color: var(--blue-tint); }
+.span-row:focus-within .span-subtask-add:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.span-name {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  align-self: stretch;
+  gap: 0 4px;
+  overflow: hidden;
+  max-width: 100%;
+  min-height: 72px;
+  padding: 6px 8px 6px 4px;
+  background: var(--surface);
+  transition: none;
+  cursor: pointer;
+}
+.span-row.is-alert .span-name { background: var(--surface); }
+.span-row.is-hover .span-name { background: var(--blue-tint); }
+.week-span.is-reordering { cursor: grabbing; }
+.span-row.is-dragging {
+  position: relative;
+  z-index: 5;
+  background: var(--blue-fill);
+  box-shadow: var(--shadow-sm);
+}
+.span-row.is-dragging .span-name { background: var(--blue-fill); }
+.span-subtask-lane.is-dragging { position: relative; z-index: 5; box-shadow: var(--shadow-sm); }
+.span-priority-handle {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.span-priority-handle:active,
+.span-row.is-dragging .span-priority-handle,
+.span-row.is-reordering .span-priority-handle { cursor: grabbing; }
+.week-span.is-reordering, body:has(.week-span.is-reordering) { user-select: none; }
+.span-name-copy { display: grid; min-width: 0; align-content: center; gap: 3px; }
+.span-name-actions { display: flex; min-width: 0; height: 24px; align-items: center; gap: 6px; }
+.span-name-subtasks { display: flex; flex: 1; min-width: 0; align-items: center; justify-content: flex-end; gap: 4px; }
+.span-subtask-count { margin-right: auto; color: var(--faint); font-size: .6875rem; white-space: nowrap; }
+.span-name-subtasks > .span-priority-handle { position: absolute; z-index: 2; top: 4px; left: 2px; width: 20px; height: 20px; --md-icon-button-state-layer-width: 20px; --md-icon-button-state-layer-height: 20px; --md-icon-button-icon-size: 16px; --md-icon-button-icon-color: var(--line-strong); }
+.span-row:hover .span-name-subtasks > .span-priority-handle, .span-name-subtasks > .span-priority-handle:focus-visible { --md-icon-button-icon-color: var(--muted); }
+.span-name-title { display: block; min-width: 0; }
+/* 名前の欄の予定工数と累計実績。 */
+.plan-hours { display: flex; min-width: 0; gap: 8px; color: var(--faint); font-size: .6875rem; line-height: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plan-hours b, .span-name .plan-hours b, .month-name-title .plan-hours b { display: inline; overflow: visible; color: var(--ink); font-weight: 500; -webkit-line-clamp: none; }
+.plan-hours .plan-hours-actual b { color: var(--actual); }
+.plan-hours .plan-hours-actual.is-over b { color: var(--danger); }
+.span-name b {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  font-size: .8125rem;
+  font-weight: 500;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  padding-top: 0;
+}
+/* 1段目に課題キー（Backlog）かプロジェクト名（通常の課題）、2段目に課題名。どちらも同じ高さ・位置にそろえる。 */
+.span-name b.has-issue-key { display: grid; gap: 0; padding-top: 0; line-height: 14px; }
+.span-name .span-name-description { line-height: 18px; }
+.span-name .span-name-key { font-size: .6875rem; line-height: 14px; min-height: 14px; }
+.span-name .span-name-top { display: block; min-height: 14px; overflow: hidden; font-size: .6875rem; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.span-name .span-name-top a.span-name-key { display: inline; margin-right: 6px; }
+/* 1段目の課題キーは灰色なので、リンクだと分かるよう ↗ を常に出す。 */
+.span-name .span-name-top a.span-name-key .material-symbols-outlined { display: inline-block; margin-left: 2px; font-size: 10px; line-height: 14px; vertical-align: -1px; opacity: 1; }
+/* 1段目はプロジェクト名を主に見せ、課題キーは控えめにする（押せばBacklogが開く）。 */
+.span-name .span-name-lead { color: var(--muted); font-weight: 500; }
+.span-name .span-name-sep { margin: 0 4px; color: var(--faint); font-weight: 400; }
+.span-name .span-name-sep + a.span-name-key { margin-right: 0; }
+.span-name .span-name-top a.span-name-key { color: var(--faint); }
+.span-name .span-name-top a.span-name-key:hover, .span-name .span-name-top a.span-name-key:focus-visible { color: var(--blue); text-decoration: underline; }
+.span-name-key, .span-name-description { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.span-name-key { color: var(--muted); font-family: var(--mono); font-size: .6875rem; font-weight: 400; letter-spacing: .01em; line-height: 16px; }
+a.span-name-key { display: inline-flex; max-width: 100%; align-items: center; gap: 2px; color: var(--blue); text-decoration: none; }
+a.span-name-key .material-symbols-outlined { font-size: 12px; opacity: 0; transition: opacity var(--motion-fast) var(--motion-ease); }
+a.span-name-key:hover, a.span-name-key:focus-visible { text-decoration: underline; outline: none; }
+a.span-name-key:hover .material-symbols-outlined, a.span-name-key:focus-visible .material-symbols-outlined { opacity: 1; }
+.plan-dialog .plan-issue-link { display: inline-flex; align-self: flex-start; align-items: center; gap: 4px; margin-top: 4px; color: var(--blue); font-size: .75rem; text-decoration: none; }
+.plan-dialog .plan-issue-link[hidden] { display: none; }
+.plan-dialog .plan-issue-link .material-symbols-outlined { font-size: 16px; }
+.plan-dialog .plan-issue-link:hover, .plan-dialog .plan-issue-link:focus-visible { text-decoration: underline; }
+.work-card.is-done .task-issue-text strong { color: var(--faint); }
+.span-name small { display: block; min-width: 0; overflow: hidden; margin-top: 2px; color: var(--muted); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.span-name-status {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin-left: 0;
+  vertical-align: middle;
+}
+.span-name-status .weekly-status { padding: 1px 6px; font-size: .6875rem; line-height: 1.2; }
+.plan-status-button { display: inline-flex; align-items: center; gap: 1px; border: 0; cursor: pointer; font: inherit; }
+.span-name-status .plan-status-button { padding: 1px 2px 1px 6px; font-size: .6875rem; font-weight: 500; }
+.plan-status-button .material-symbols-outlined { font-size: 14px; }
+.plan-status-button:hover { filter: brightness(.95); box-shadow: inset 0 0 0 1px currentColor; }
+.plan-status-button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+#planStatusMenuAnchor { position: fixed; z-index: 800; width: 0; height: 0; pointer-events: none; }
+#planStatusMenu md-menu-item.is-current { --md-menu-item-label-text-color: var(--blue); --md-menu-item-label-text-weight: 500; }
+.span-name-status-extra { min-width: 0; overflow: hidden; color: var(--faint); font-size: .6875rem; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.span-day { display: flex; align-items: flex-start; min-height: 72px; padding: 38px 5px 8px; border-right-color: #edf0f4; }
+.span-day.is-saturday, .span-day.is-sunday { background: var(--surface-2); }
+.span-day.is-work:not(.is-end)::after, .month-day.is-work:not(.is-end)::after { content: ''; position: absolute; z-index: 2; top: 36px; right: -1px; height: 20px; border-right: 1px solid rgba(11,87,208,.2); pointer-events: none; }
+.span-day-stack { position: relative; z-index: 2; display: flex; min-width: 0; width: 100%; padding: 0 3px; }
+.span-actual {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  height: 20px;
+  overflow: hidden;
+  padding: 0 6px;
+  border-radius: var(--radius-xs);
+  color: var(--actual);
+  background: var(--actual-fill);
+  font-weight: 500;
+  font-style: normal;
+  font-size: .75rem;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.span-day-stack > .span-actual { width: max(44px, var(--actual-ratio, 100%)); max-width: 100%; justify-content: space-between; }
+.span-day-stack > .span-actual:has(small) { width: max(84px, var(--actual-ratio, 100%)); }
+.span-actual:hover, .month-actual:hover { filter: brightness(.95); }
+.span-actual small { margin-left: auto; padding-left: 6px; font-size: .6875rem; font-weight: 400; }
+.span-day-stack > .span-actual.is-early { color: var(--warn); background: var(--warn-fill); }
+.span-day-stack > .span-actual.is-late { color: var(--danger); background: var(--danger-fill); }
+.span-bar-label {
+  position: relative;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+/* 予定名の帯と期間内の日別実績を1つの枠にまとめる。枠外の実績は日付セルに残す。 */
+.timeline-period-layer { position: absolute; z-index: 1; inset: 0; display: grid; grid-template-columns: inherit; align-content: start; padding-top: 8px; pointer-events: none; }
+.timeline-period { --timeline-body: var(--plan-fill); --timeline-accent: var(--plan); container: timeline / inline-size; position: relative; display: flex; min-width: 0; height: 56px; align-items: flex-start; gap: 8px; overflow: clip; margin: 0 5px; padding: 3px 8px 0; border-radius: var(--radius-xs); color: var(--blue-ink); background: var(--timeline-body); font-size: .8125rem; line-height: 22px; }
+.timeline-period-caption { position: relative; z-index: 1; display: inline-flex; flex: 0 1 auto; min-width: 0; max-width: 100%; height: 22px; align-items: center; gap: 6px; background: var(--timeline-body); }
+.timeline-period-title { flex: 1 1 auto; min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-period-icon { display: inline-grid; flex: 0 0 14px; width: 14px; place-items: center; font-size: 14px; font-weight: 700; line-height: 1; }
+.timeline-period-meta, .timeline-period-state, .timeline-period-hours { flex: 0 0 auto; font-size: .6875rem; white-space: nowrap; }
+.timeline-period-meta { display: none; }
+.timeline-period-hours { display: inline-flex; color: var(--muted); gap: 10px; margin-left: auto; font-size: .6875rem; font-variant-numeric: tabular-nums; }
+.timeline-period-hours b { color: var(--ink); font-weight: 500; }
+.timeline-period-hours .timeline-period-actual b { color: var(--actual); }
+.timeline-period-hours + .timeline-period-meta { margin-left: 4px; }
+.timeline-period-state { margin-top: 0; color: var(--danger); font-size: .6875rem; font-weight: 500; line-height: 16px; }
+.timeline-period.is-done .timeline-period-state { color: var(--muted); }
+.timeline-period-progress { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--timeline-accent); opacity: .45; }
+.timeline-period-progress.is-over { background: var(--danger); opacity: .55; }
+.timeline-period-edge { display: inline-grid; flex: 0 0 auto; height: 22px; align-items: center; font-size: 20px; line-height: 1; }
+.timeline-period-edge.is-after { margin-left: auto; }
+.timeline-period.continues-before { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.timeline-period.continues-after { margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.timeline-period.is-overdue { --timeline-body: var(--danger-fill); --timeline-accent: var(--danger); color: var(--ink); }
+.timeline-period.is-done { --timeline-body: #f1f3f4; --timeline-accent: #9aa0a6; color: var(--muted); }
+.timeline-period.is-overdue .timeline-period-icon { color: var(--danger); }
+.timeline-period.is-done .timeline-period-icon { color: var(--ok); }
+.timeline-period.is-compact .timeline-period-meta, .timeline-period.is-compact .timeline-period-hours { display: none; }
+@container timeline (max-width: 480px) { .timeline-period-meta { display: none; } }
+@container timeline (max-width: 340px) { .timeline-period-hours { display: none; } }
+@container timeline (max-width: 240px) { .timeline-period-state { display: none; } }
+.timeline-period.is-tiny { justify-content: center; gap: 2px; margin-right: 3px; margin-left: 3px; padding: 0 2px; }
+.timeline-period.is-tiny .timeline-period-title { display: none; }
+.timeline-period.is-tiny:has(.timeline-period-edge) .timeline-period-caption { display: none; }
+/* 長く実績のない期間を線にした帯。帯そのものは透明で、中に塗り（fill）と線（gap）の区間を並べる。 */
+.timeline-period.has-gaps { padding: 0; background: transparent; overflow: visible; }
+.timeline-period.is-week.has-gaps::before { display: none; }
+.timeline-period-fill, .timeline-period-gap { position: absolute; top: 0; bottom: 0; display: flex; min-width: 0; align-items: flex-start; gap: 6px; overflow: clip; padding: 3px 8px 0; }
+.timeline-period-fill { border-radius: var(--radius-xs); background: var(--timeline-body); }
+.timeline-period-fill.after-gap { margin-left: 3px; }
+.timeline-period.continues-before .timeline-period-fill:first-child { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.timeline-period.continues-after .timeline-period-fill:last-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.timeline-period-gap { color: var(--faint); }
+.timeline-period-gap::after { content: ''; position: absolute; top: 33px; right: 0; left: 0; border-top: 2px solid var(--timeline-body); pointer-events: none; }
+.timeline-period-gap-label { min-width: 0; overflow: hidden; font-size: .6875rem; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-period-until { flex: 0 0 auto; color: var(--muted); font-size: .6875rem; white-space: nowrap; }
+.timeline-period-fill .timeline-period-edge.is-after, .timeline-period-gap .timeline-period-edge.is-after { margin-left: auto; }
+.timeline-period-outside { display: flex; min-width: 0; align-items: center; gap: 4px; overflow: hidden; margin: 0 10px; color: var(--faint); font-size: .6875rem; line-height: 24px; white-space: nowrap; }
+.timeline-period-outside .timeline-period-hours { margin-left: 16px; }
+.timeline-period-outside .material-symbols-outlined { flex: 0 0 auto; font-size: 16px; }
+.timeline-period-outside.is-overdue { color: var(--danger); }
+.span-row:hover .timeline-period, .month-plan:hover .timeline-period { filter: brightness(.97); }
+.span-actual-hours { color: var(--actual); }
+.span-name-period { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px; font-size: .6875rem; line-height: 18px; }
+.span-period-label { color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.span-period-label.is-undated { padding: 0 6px; border: 1px dashed var(--line-strong); border-radius: var(--radius-pill); line-height: 16px; }
+.span-flag { display: inline-flex; align-items: center; padding: 0 6px; border-radius: var(--radius-pill); font-size: .6875rem; font-weight: 500; line-height: 16px; white-space: nowrap; }
+.span-flag.is-early { color: var(--warn); background: var(--warn-fill); }
+.span-flag.is-late { color: var(--danger); background: var(--danger-fill); }
+.span-subtask-add { flex: 0 0 24px; width: 24px; height: 24px; --md-icon-button-state-layer-width: 24px; --md-icon-button-state-layer-height: 24px; --md-icon-button-icon-size: 16px; --md-icon-button-icon-color: var(--muted); }
+.span-subtask-add:focus-visible { outline: none; }
+/* 親の開閉と子の枝を同じ縦軸にそろえる。追加・並べ替えは下段の操作列。 */
+.span-subtasks-toggle { position: relative; z-index: 1; display: grid; width: 28px; height: 28px; align-self: center; margin: 0 0 0 -2px; padding: 0; place-items: center; border: 0; border-radius: 50%; color: var(--muted); background: transparent; cursor: pointer; }
+.span-subtasks-toggle:hover { color: var(--blue); background: var(--blue-fill); }
+.span-subtasks-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.span-subtasks-toggle span { font-size: 20px; transition: transform var(--motion-fast) var(--motion-ease); }
+.span-subtasks-toggle[aria-expanded="true"] span { color: var(--blue); transform: rotate(90deg); }
+.span-subtasks-spacer { width: 24px; }
+.span-row.is-expanded > .span-name::after { content: ''; position: absolute; left: 16px; top: calc(100% - 8px); bottom: -1px; border-left: 1px solid var(--line-strong); pointer-events: none; }
+.span-subtask-lane { display: none; min-height: 44px; border-bottom-color: #edf0f4; background: var(--surface-2); }
+.span-subtask-lane.is-visible { display: grid; }
+.span-subtask-lane.is-last-subtask { border-bottom-color: var(--line-strong); }
+.span-subtask-lane .span-name { display: grid; grid-template-columns: 14px minmax(0,1fr); align-items: center; gap: 0 6px; min-height: 44px; padding: 4px 8px 4px 28px; background: var(--surface-2); cursor: default; }
+.span-subtask-lane .span-name::before { content: ''; position: absolute; top: 0; bottom: -1px; left: 16px; border-left: 1px solid var(--line-strong); pointer-events: none; }
+.span-subtask-lane .span-name::after { content: ''; position: absolute; top: 21px; left: 16px; width: 8px; border-top: 1px solid var(--line-strong); pointer-events: none; }
+.span-subtask-lane.is-last-subtask .span-name::before { bottom: auto; height: 22px; }
+.span-subtask-copy { display: grid; min-width: 0; gap: 1px; }
+.span-subtask-lane .span-subtask-meta { display: flex; gap: 8px; margin: 0; color: var(--faint); font-size: .6875rem; line-height: 14px; font-variant-numeric: tabular-nums; }
+.span-subtask-meta > span { white-space: nowrap; }
+.span-subtask-meta > .span-subtask-actual-total { color: var(--actual); }
+.span-subtask-meta > .span-subtask-actual-total.is-over { color: var(--danger); }
+.span-subtask-lane .span-day > .span-subtask-actual { width: max(40px, var(--actual-ratio, 100%)); max-width: 100%; }
+.span-subtask-lane .span-day { min-height: 44px; padding: 4px 8px; align-items: center; }
+.span-subtask-lane .span-subtask-check { align-self: start; margin-top: 3px; }
+.span-subtask-edit { display: block; min-width: 0; overflow: hidden; padding: 0; border: 0; color: var(--ink); background: transparent; font: inherit; font-size: .8125rem; line-height: 20px; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.span-subtask-edit:hover { color: var(--blue-ink); text-decoration: underline; }
+.span-subtask-edit:focus-visible { border-radius: 2px; outline: 2px solid var(--blue); outline-offset: 1px; }
+.span-subtask-lane .span-subtask-check.is-done + .span-subtask-copy .span-subtask-edit { color: var(--muted); }
+.span-subtask-actual { height: 20px; padding: 0 6px; color: var(--actual); background: #edf5ef; font-size: .6875rem; }
+.span-subtask-check {
+  display: block;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1.5px solid #9aa0a6;
+  border-radius: 50%;
+}
+.span-subtask-check.is-doing { border-color: var(--blue); box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 7px var(--blue); }
+.span-subtask-check.is-done { position: relative; border-color: var(--ok); background: var(--ok); }
+.span-subtask-check.is-done::before { content: ''; position: absolute; top: 3px; left: 3px; width: 6px; height: 3px; border-left: 1.5px solid var(--on-fill); border-bottom: 1.5px solid var(--on-fill); transform: rotate(-45deg); }
+/* ---------- plan dialog ---------- */
+.plan-dialog-head-copy { min-width: 0; }
+.plan-dialog-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--blue);
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+}
+.plan-dialog-fields {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 20px 16px;
+  background: var(--surface);
+}
+.plan-dialog:has(.plan-dialog-title-block) .plan-dialog-fields { gap: 0; padding: 0 20px 16px; }
+.plan-dialog-title-block { padding: 0 0 12px; }
+.plan-dialog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 16px;
+}
+.plan-dialog-title-label {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--faint);
+  font-size: .6875rem;
+  font-weight: 500;
+}
+input.plan-dialog-title-field,
+.plan-dialog .plan-name-text {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.3;
+  box-shadow: none;
+}
+input.plan-dialog-title-field:hover { border-color: var(--muted); }
+input.plan-dialog-title-field:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(11,87,208,.14);
+  outline: 0;
+}
+.plan-dialog .plan-name-text { display: flex; align-items: center; }
+.plan-dialog-meta {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  margin: 10px 0 0;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--faint);
+  background: var(--surface-2);
+  font-size: .6875rem;
+  line-height: 1.45;
+}
+.plan-dialog-toolbar .plan-progress-select { flex: 0 0 180px; width: 180px; }
+.plan-dialog-priority { display: flex; gap: 4px; }
+.plan-dialog-priority .ghost-button { height: 32px; padding: 0 12px; }
+.plan-dialog-primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 16px;
+  align-items: start;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.plan-dialog-primary .plan-dialog-section {
+  display: block;
+  padding: 0;
+  border-top: 0;
+}
+.plan-dialog-primary .plan-dialog-span,
+.plan-dialog-primary .plan-dialog-note-section { grid-column: 1 / -1; }
+.plan-dialog-primary .plan-dialog-row { display: block; }
+.plan-dialog-primary .plan-dialog-ico { display: none; }
+.plan-dialog-primary .plan-dialog-row-body { display: grid; gap: 0; }
+.plan-dialog-primary .field,
+.plan-dialog-primary #planDialogPlanned,
+.plan-project-section .field {
+  height: auto;
+  min-height: 56px;
+  background: var(--surface);
+  font-size: .875rem;
+  font-weight: 500;
+}
+.plan-dialog-primary .plan-dialog-note-field {
+  height: auto;
+  min-height: 128px;
+  padding: 0;
+}
+.plan-dialog-section {
+  display: grid;
+  gap: 12px;
+  padding: 16px 16px 16px 12px;
+  border-top: 1px solid var(--line);
+}
+.plan-dialog-row { display: grid; grid-template-columns: 44px minmax(0,1fr); gap: 12px; align-items: start; }
+.plan-dialog-ico {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: var(--faint);
+}
+.plan-dialog-ico svg { width: 20px; height: 20px; }
+.plan-dialog-row-body { min-width: 0; display: grid; gap: 8px; }
+.plan-dialog-fields label { display: grid; gap: 6px; color: var(--faint); font-size: .75rem; font-weight: 500; }
+.plan-dialog-title-label { display: block; gap: 0; margin: 0 0 6px; color: var(--faint); font-size: .6875rem; font-weight: 500; }
+.plan-dialog-fields .plan-dialog-unit,
+.plan-dialog-unit {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+}
+.plan-dialog-note-field {
+  width: 100%;
+  min-height: 128px;
+  resize: vertical;
+  line-height: 1.5;
+}
+.plan-dialog-unit .field { flex: 1 1 auto; width: auto; min-width: 0; }
+.plan-dialog-unit > span { flex: 0 0 auto; color: var(--faint); font-size: .8125rem; font-weight: 500; white-space: nowrap; }
+.plan-dialog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.plan-dialog-hint { margin: 0; color: var(--faint); font-size: .75rem; line-height: 1.5; }
+.plan-dialog-hint.is-over { color: var(--danger); }
+.plan-dialog-period { display: grid; gap: 6px; }
+.plan-dialog-clear-period { justify-self: start; height: 32px; }
+.plan-dialog-subtasks {
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  border-top: 0;
+}
+.plan-dialog-subtasks-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#planDialogSubtasks:has(.subtask-empty) .plan-dialog-subtask-cols { display: none; }
+.plan-dialog-subtasks-head strong { display: block; color: var(--ink); font-size: .875rem; font-weight: 500; }
+.plan-dialog-subtasks-head p { margin: 4px 0 0; color: var(--faint); font-size: .75rem; font-weight: 400; }
+.plan-dialog-subtasks-head .ghost-button {
+  height: 36px;
+  padding: 0 12px;
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--blue);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.plan-dialog-subtask-cols,
+.plan-dialog-subtask-row { display: grid; grid-template-columns: 40px minmax(0,1fr) 120px 56px 36px; gap: 8px; align-items: center; }
+.plan-dialog-subtask-cols > :first-child { text-align: center; }
+.plan-dialog-subtask-cols > :nth-child(4) { text-align: right; }
+.plan-dialog-subtask-actual { color: var(--muted); font-size: .8125rem; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.plan-dialog-subtask-actual.is-over { color: var(--danger); font-weight: 500; }
+.plan-dialog-subtask-row.is-done .plan-dialog-subtask-title { --md-outlined-text-field-input-text-color: var(--faint); }
+.plan-dialog-subtask-cols { color: var(--faint); font-size: .75rem; font-weight: 500; }
+.plan-dialog-subtask-cols .plan-dialog-unit > span:last-child { visibility: hidden; }
+.plan-dialog-subtask-list { display: grid; gap: 6px; }
+.plan-dialog-subtask-row .field { height: auto; min-height: 40px; }
+.plan-dialog-subtask-row .plan-dialog-unit { min-width: 0; }
+.plan-dialog-subtask-row .plan-dialog-unit .field { width: 0; flex: 1 1 0; }
+.plan-dialog-issue-sum {
+  margin: 0;
+  color: var(--faint);
+  font-size: .75rem;
+}
+.plan-dialog-issue-sum.is-over { color: var(--danger); }
+.plan-dialog-subtask-list .subtask-empty {
+  padding: 16px 12px;
+  border-radius: var(--radius-md);
+  color: var(--faint);
+  background: var(--surface-2);
+  font-size: .8125rem;
+}
+.plan-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 -4px 12px rgba(60,64,67,.04);
+}
+.plan-dialog-actions .danger-button { margin-right: auto; }
+.plan-dialog-actions .ghost-button { border-color: transparent; }
+.plan-dialog-actions .primary-button { min-width: 88px; }
+.away-dialog { position: relative; width: min(420px, 100%); }
+.away-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 28px 24px 20px; }
+.away-hello { display: grid; justify-items: center; text-align: center; }
+.away-buddy {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  margin-bottom: 14px;
+  border-radius: var(--radius);
+  color: var(--meet);
+  background: var(--meet-fill);
+  transform: rotate(-8deg);
+}
+.away-buddy .material-symbols-outlined {
+  font-size: 36px;
+  transform: rotate(8deg);
+  transform-origin: 28% 82%;
+}
+.away-buddy.is-waving .material-symbols-outlined { animation: away-wave .9s var(--motion-ease) 1; }
+@keyframes away-wave {
+  0% { transform: rotate(8deg); }
+  18% { transform: rotate(24deg); }
+  36% { transform: rotate(-2deg); }
+  54% { transform: rotate(20deg); }
+  72% { transform: rotate(4deg); }
+  100% { transform: rotate(8deg); }
+}
+.away-hello h2 { margin: 0; font-size: 1.5rem; font-weight: 500; letter-spacing: 0; line-height: 1.2; }
+.away-hours {
+  margin: 16px 0 0;
+  color: var(--meet);
+  font-size: 2.25rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.away-hours small { margin-left: 2px; color: var(--meet); font-size: .875rem; font-weight: 500; }
+.away-when { margin: 6px 0 0; color: var(--faint); font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.away-task { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 10px 0 0; max-width: 28em; color: var(--muted); font-size: .8125rem; line-height: 1.5; }
+.away-task span { color: var(--faint); }
+.away-task strong { color: var(--ink); font-weight: 500; }
+.away-picks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.away-pick {
+  flex: 1 1 9.5rem;
+  min-width: min(100%, 9.5rem);
+  --md-filled-tonal-button-container-height: 44px;
+  --md-filled-tonal-button-label-text-size: .8125rem;
+  --md-filled-tonal-button-label-text-weight: 500;
+}
+.away-pick-break {
+  --md-filled-tonal-button-container-color: var(--actual-fill);
+  --md-filled-tonal-button-label-text-color: #0d652d;
+  --md-filled-tonal-button-icon-color: #0d652d;
+  --md-filled-tonal-button-hover-label-text-color: #0d652d;
+  --md-filled-tonal-button-hover-icon-color: #0d652d;
+  --md-filled-tonal-button-hover-state-layer-color: #0d652d;
+  --md-filled-tonal-button-focus-label-text-color: #0d652d;
+  --md-filled-tonal-button-focus-icon-color: #0d652d;
+  --md-filled-tonal-button-pressed-label-text-color: #0d652d;
+  --md-filled-tonal-button-pressed-icon-color: #0d652d;
+  --md-filled-tonal-button-pressed-state-layer-color: #0d652d;
+}
+.away-pick-keep {
+  --md-filled-tonal-button-container-color: var(--blue-fill);
+  --md-filled-tonal-button-label-text-color: var(--blue-ink);
+  --md-filled-tonal-button-icon-color: var(--blue);
+  --md-filled-tonal-button-hover-label-text-color: var(--blue-ink);
+  --md-filled-tonal-button-hover-icon-color: var(--blue);
+  --md-filled-tonal-button-hover-state-layer-color: var(--blue);
+  --md-filled-tonal-button-focus-label-text-color: var(--blue-ink);
+  --md-filled-tonal-button-focus-icon-color: var(--blue);
+  --md-filled-tonal-button-pressed-label-text-color: var(--blue-ink);
+  --md-filled-tonal-button-pressed-icon-color: var(--blue);
+  --md-filled-tonal-button-pressed-state-layer-color: var(--blue);
+}
+.away-else {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.away-else label { display: grid; gap: 6px; color: var(--faint); font-size: .75rem; font-weight: 500; }
+.away-else .primary-button { justify-self: end; margin-top: 2px; }
+
+/* ---------- plan details ---------- */
+.plan-details { border-top: 1px solid var(--line); background: var(--surface-2); }
+.plan-details > summary { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; color: var(--muted); cursor: pointer; font-size: .8125rem; font-weight: 500; list-style: none; }
+.plan-details > summary::-webkit-details-marker { display: none; }
+.plan-details > summary::before { content: '▸'; margin-right: 10px; color: var(--faint); font-size: .75rem; transition: transform var(--motion-fast) var(--motion-ease); }
+.plan-details[open] > summary::before { transform: rotate(90deg); }
+.plan-details > summary .subtask-sum { margin-left: auto; color: var(--faint); }
+.plan-details .plan-note { padding-top: 4px; }
+.plan-details .subtasks { border-top: 0; }
+
+/* ---------- storage ---------- */
+.planning-storage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+}
+.planning-storage-copy { min-width: 0; }
+.planning-storage-copy strong { display: block; overflow: hidden; font-size: .875rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.planning-storage-copy small { display: block; overflow: hidden; margin-top: 2px; color: var(--faint); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.planning-storage.is-unset { background: var(--warn-fill); box-shadow: none; }
+.planning-storage.is-unset .planning-storage-copy small { color: var(--warn); }
+.planning-storage-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.storage-form { display: grid; gap: 16px; padding: 8px 24px; }
+.storage-note { margin: 0; padding: 14px 16px; border: 0; border-radius: var(--radius-md); color: var(--blue-ink); background: var(--blue-tint); font-size: .8125rem; }
+.storage-field label { display: block; margin-bottom: 6px; color: var(--faint); font-size: .75rem; font-weight: 500; }
+.storage-field-row { display: flex; gap: 8px; }
+.storage-field-row .field { flex: 1; }
+.folder-browser { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.folder-browser-bar { display: flex; align-items: center; gap: 4px; min-height: 48px; padding: 4px 8px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.folder-breadcrumb { display: flex; flex: 1; min-width: 0; align-items: center; gap: 2px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.folder-crumb { flex: 0 0 auto; max-width: 14em; overflow: hidden; padding: 6px 8px; border: 0; border-radius: var(--radius-sm, 4px); color: var(--muted); background: transparent; font: inherit; font-size: .8125rem; text-overflow: ellipsis; cursor: pointer; }
+button.folder-crumb:hover { color: var(--ink); background: var(--blue-tint); }
+.folder-crumb.is-current { color: var(--ink); font-weight: 500; cursor: default; }
+.folder-crumb-sep { flex: 0 0 auto; color: var(--faint); font-size: 18px; }
+.folder-list { min-height: 200px; max-height: 300px; overflow-y: auto; padding: 4px 0; }
+.folder-row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 4px 0 16px; color: var(--ink); background: var(--surface); font-size: .8125rem; cursor: pointer; user-select: none; outline: none; }
+.folder-row:hover { background: var(--surface-2); }
+.folder-row:focus-visible { background: var(--blue-tint); }
+.folder-row[aria-selected="true"] { color: var(--blue-ink); background: var(--blue-fill); }
+.folder-row-icon { flex: 0 0 auto; color: var(--muted); font-size: 22px; }
+.folder-row[aria-selected="true"] .folder-row-icon { color: var(--blue); }
+.folder-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-row-open { flex: 0 0 auto; --md-icon-button-icon-color: var(--muted); }
+.folder-browser-foot { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 16px; border-top: 1px solid var(--line); color: var(--ink); background: var(--surface-2); font-size: .8125rem; }
+.folder-browser-foot .material-symbols-outlined { color: var(--blue); font-size: 20px; }
+.folder-selection { min-width: 0; overflow-wrap: anywhere; }
+.folder-browser-hint { margin: 6px 0 0; color: var(--faint); font-size: .75rem; }
+.folder-browser-empty { padding: 48px 16px; color: var(--faint); text-align: center; font-size: .8125rem; }
+.folder-browser-note { margin: 0; padding: 10px 16px; color: var(--warn); background: var(--warn-fill); font-size: .75rem; }
+.folder-result { padding: 14px 16px; border: 0; border-radius: var(--radius-md); background: var(--actual-fill); }
+.folder-result strong { display: block; font-size: .8125rem; font-weight: 500; }
+.storage-mode { width: 100%; }
+#appFileName[hidden] { display: none; }
+.folder-result.is-missing { background: var(--warn-fill); }
+.folder-result.is-missing strong { color: var(--warn); }
+.folder-result-files { margin: 8px 0 0; padding-left: 1.25em; font-size: .8125rem; }
+.folder-result-files li + li { margin-top: 2px; }
+.folder-result small { display: block; margin-top: 3px; color: var(--muted); font-size: .75rem; overflow-wrap: anywhere; }
+.storage-warning { margin: 0; color: var(--faint); font-size: .75rem; }
+
+.weekly-status { padding: 4px 10px; color: var(--muted); background: var(--surface-3); text-align: center !important; font-size: .75rem; }
+.task-table .task-origin,
+.task-table .daily-status { min-width: 72px; min-height: 24px; justify-content: center; padding: 0 8px; font-size: .75rem; line-height: 24px; }
+.weekly-status.is-ok { color: var(--ok); background: var(--actual-fill); }
+.weekly-status.is-ahead { color: var(--blue-ink); background: var(--plan-fill); }
+.weekly-status.is-alert { color: var(--danger); background: var(--danger-fill); }
+
+/* ---------- projects ---------- */
+.project-period-command { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.project-period-command .period-input { width: 150px; }
+.google-tasks-settings-fields { display: grid; gap: 0; }
+.google-tasks-settings-fields > label:not(.settings-check-row) { display: grid; gap: 6px; color: var(--faint); font-size: .75rem; font-weight: 500; }
+.google-tasks-list-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.google-tasks-list-label .ghost-button { height: 30px; padding: 0 10px; font-size: .6875rem; }
+.google-tasks-scope-note { margin: 0; padding: 12px 14px; border-radius: var(--radius-md); color: var(--blue-ink); background: var(--blue-tint); font-size: .75rem; line-height: 1.5; }
+#projectsView .section-heading { align-items: end; flex-wrap: wrap; }
+.project-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.project-list { display: grid; gap: 12px; }
+.project-card { padding: 20px; }
+.project-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.project-card-copy { min-width: 0; }
+.project-card-title { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 8px; }
+.project-card-title h3 { margin: 0; font-size: 1rem; font-weight: 500; overflow-wrap: anywhere; }
+.project-card-copy > p { margin: 6px 0 0; color: var(--faint); font-size: .8125rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.project-card-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.project-card-actions .ghost-button, .project-card-actions .primary-button { height: 34px; padding: 0 12px; }
+.project-card-actions md-outlined-button { --md-outlined-button-container-height: 34px; }
+.project-card-actions md-filled-button { --md-filled-button-container-height: 34px; }
+.project-status { padding: 3px 9px; color: var(--muted); background: var(--surface-3); font-size: .6875rem; }
+.project-status.is-active { color: var(--ok); background: var(--actual-fill); }
+.project-status.is-paused { color: var(--warn); background: var(--warn-fill); }
+.project-status.is-done { color: var(--faint); background: var(--surface-3); }
+.project-status.is-archived { color: var(--faint); background: var(--surface-2); }
+.project-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; color: var(--faint); font-size: .75rem; }
+.project-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
+.project-metric { min-width: 0; padding: 12px 14px; border-radius: var(--radius-md); background: var(--surface-2); }
+.project-metric span { display: block; color: var(--faint); font-size: .6875rem; font-weight: 500; }
+.project-metric strong { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px; margin-top: 6px; font-family: var(--mono); font-size: 1.125rem; font-weight: 400; }
+.project-metric strong small { margin-left: 3px; color: var(--faint); font-family: var(--font); font-size: .75rem; }
+.project-metric.is-alert strong { color: var(--danger); }
+.project-metric.is-capacity strong { color: var(--blue-ink); }
+.project-month-editor { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(0, 1.2fr); gap: 16px 24px; align-items: start; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
+.project-month-editor-title { grid-column: 1 / -1; margin: 0; color: var(--ink); font-size: .875rem; font-weight: 500; }
+.project-month-field-heading { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-size: .75rem; }
+.project-month-note { display: grid; gap: 10px; min-width: 0; }
+.project-month-editor .field { height: auto; }
+.project-month-editor .field.is-dirty { --md-outlined-text-field-outline-color: var(--blue); }
+.project-month-hours { display: grid; gap: 10px; min-width: 0; }
+
+.project-month-preview { margin: 0; color: var(--faint); font-size: .75rem; line-height: 1.4; }
+.project-month-preview.is-error { color: var(--danger); }
+.project-month-editor label, .project-dialog-fields > label, .project-dialog-fields .plan-dialog-grid label, .project-month-fields label { display: grid; gap: 6px; color: var(--faint); font-size: .75rem; font-weight: 500; }
+.project-month-editor textarea { min-height: 40px; resize: vertical; }
+.project-month-editor .field.is-dirty { border-color: var(--blue); }
+.project-issues { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--line); }
+.project-issues-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.project-issues-toggle .material-symbols-outlined { font-size: 20px; color: var(--faint); }
+.project-issues-toggle h4 { margin: 0; font-size: .8125rem; font-weight: 500; }
+.project-issues-count { margin-left: auto; color: var(--faint); font-size: .75rem; }
+.project-issues-body { padding-top: 4px; }
+.project-issue-list { display: grid; gap: 0; margin: 8px 0 0; padding: 0; list-style: none; }
+.project-issue-row { display: grid; grid-template-columns: minmax(0,1fr) 90px 90px 76px; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: .75rem; }
+.project-issue-row:first-child { border-top: 0; }
+.project-issue-name { min-width: 0; overflow-wrap: anywhere; }
+.project-issue-name strong { display: block; font-weight: 500; }
+.project-issue-name small { display: block; margin-top: 2px; color: var(--faint); }
+.project-issue-hours { color: var(--muted); font-family: var(--mono); text-align: right; white-space: nowrap; }
+.project-issue-status { justify-self: end; }
+.project-empty-issues { margin: 8px 0 0; color: var(--faint); font-size: .75rem; }
+.project-dialog { max-width: 620px; }
+
+.project-dialog-eyebrow { display: block; color: var(--blue); font-size: .6875rem; font-weight: 500; }
+.project-dialog-fields { display: grid; gap: 14px; padding: 20px; }
+.project-dialog-textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
+.project-dialog-permanent-note { margin: 0; padding: 12px 14px; border-radius: var(--radius-md); color: var(--blue-ink); background: var(--blue-tint); font-size: .75rem; line-height: 1.5; }
+.project-month-fields { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+.project-month-fields > div strong { display: block; color: var(--ink); font-size: .875rem; font-weight: 500; }
+.project-month-fields > div p { margin: 3px 0 0; color: var(--faint); font-size: .75rem; }
+.plan-project-section .field { height: auto; min-height: 56px; }
+.project-card .weekly-status { font-size: .6875rem; }
+
+/* ---------- month gantt ---------- */
+.month-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 0 16px 12px; }
+.month-filter-query { flex: 1 1 220px; min-width: 180px; }
+.month-filter-select { flex: 0 0 180px; width: 180px; }
+.month-filter-toggle { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font-size: .8125rem; font-weight: 500; cursor: pointer; }
+.month-filter-count { color: var(--faint); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.month-gantt-scroll { overflow-x: auto; border-top: 1px solid var(--line); }
+.month-gantt { min-width: max-content; }
+.month-row { display: grid; min-width: 0; border-bottom: 1px solid var(--line); }
+.month-name { position: sticky; left: 0; z-index: 4; min-width: 0; padding: 8px 12px; border-right: 1px solid var(--line); background: var(--surface); }
+.month-head-label { display: flex; align-items: center; color: var(--faint); font-size: .75rem; font-weight: 500; }
+.month-day-head { display: grid; justify-items: center; align-content: center; gap: 2px; min-width: 0; padding: 6px 0; border: 0; border-right: 1px solid var(--line); color: var(--ink); background: transparent; font: inherit; cursor: pointer; }
+.month-day-head small { color: var(--faint); font-size: .6875rem; line-height: 1; }
+.month-day-head strong { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 50%; font-size: .8125rem; font-weight: 500; }
+.month-day-head:hover strong { background: var(--surface-3); }
+.month-day-head.is-saturday small { color: #4267a3; }
+.month-day-head.is-sunday small { color: var(--danger); }
+.month-day-head.is-today strong { color: var(--on-fill); background: var(--blue); }
+.month-day { position: relative; display: flex; min-width: 0; min-height: 44px; align-items: center; justify-content: center; border-right: 1px solid var(--line); }
+.month-day-head.is-saturday, .month-day.is-saturday, .month-day-head.is-sunday, .month-day.is-sunday, .month-day-head.is-off, .month-day.is-off { background: var(--surface-2); }
+.week-span, .month-gantt { position: relative; }
+.timeline-now-line { position: absolute; z-index: 3; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(11,87,208,.45); mix-blend-mode: multiply; pointer-events: none; }
+.month-plan { --timeline-name-col: var(--month-name-col); position: relative; }
+.month-plan .month-day { min-height: 72px; align-items: flex-start; padding-top: 36px; border-right-color: #edf0f4; }
+.month-actual { position: relative; z-index: 2; width: calc(100% - 10px); min-width: 0; height: 20px; padding: 0; border-radius: var(--radius-xs); color: var(--actual); background: var(--actual-fill); font-size: .6875rem; font-weight: 500; line-height: 20px; font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; }
+.month-actual.is-early { color: var(--warn); background: var(--warn-fill); }
+.month-actual.is-late { color: var(--danger); background: var(--danger-fill); }
+.month-totals .month-day { min-height: 28px; }
+.month-total { color: var(--muted); font-size: .6875rem; font-variant-numeric: tabular-nums; }
+.month-row.month-group { height: 40px; min-height: 40px; box-sizing: border-box; }
+.month-group { min-height: 40px; border-top: 1px solid var(--line-strong); background: var(--surface-2); }
+.month-group-toggle { position: sticky; left: 0; z-index: 4; display: flex; min-width: 0; align-items: center; gap: 8px; padding: 10px 12px; border: 0; border-right: 1px solid var(--line); color: var(--ink); background: var(--surface-2); font: inherit; text-align: left; cursor: pointer; }
+.month-group-toggle:hover { background: var(--surface-3); }
+.month-group-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.month-group-toggle .material-symbols-outlined { flex: 0 0 auto; color: var(--faint); font-size: 18px; }
+.month-group-toggle strong { min-width: 0; line-height: 20px; overflow: hidden; font-size: .8125rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.month-group-toggle > small { flex: 0 0 auto; margin-left: auto; color: var(--faint); font-size: .6875rem; white-space: nowrap; }
+.month-group-summary { position: sticky; z-index: 4; left: var(--month-name-col); grid-column: 2 / -1; display: flex; width: max-content; align-items: center; gap: 24px; padding: 8px 16px; color: var(--faint); background: var(--surface-2); font-size: .6875rem; }
+.month-group-summary > span { display: inline-flex; align-items: center; gap: 8px; line-height: 20px; white-space: nowrap; }
+.month-group-summary b { color: var(--ink); line-height: 20px; font-size: .8125rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.month-group-summary b small { margin-left: 2px; color: var(--faint); font-size: .6875rem; font-weight: 400; }
+.month-plan .month-name { display: grid; align-content: center; padding: 8px 10px 8px 16px; cursor: pointer; }
+.month-plan:hover .month-name { background: var(--surface-2); }
+.month-plan .month-name:focus-visible { background: var(--surface-2); outline: 2px solid var(--blue); outline-offset: -2px; }
+.month-plan:hover .month-day { background-color: var(--surface-2); }
+.month-plan:hover .month-day.is-saturday, .month-plan:hover .month-day.is-sunday, .month-plan:hover .month-day.is-off { background-color: var(--surface-2); }
+.month-plan.is-done .month-name-title { color: var(--muted); }
+.month-plan .month-day { cursor: pointer; }
+.month-name-heading { display: flex; min-width: 0; align-items: flex-start; gap: 8px; }
+.month-name-title { flex: 1; min-width: 0; overflow: hidden; font-size: .8125rem; line-height: 20px; }
+.month-name-title b { display: -webkit-box; overflow: hidden; font-weight: 500; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.month-name-title b.has-issue-key { display: block; }
+.month-name-heading > .weekly-status { flex: 0 0 auto; margin-top: 2px; padding: 0 5px; font-size: .6875rem; line-height: 16px; white-space: nowrap; }
+.month-board .empty-state { margin: 16px; }
+@media (max-width: 860px) {
+  :root { --month-name-col: 190px; }
+  .month-filter-select { flex: 1 1 140px; width: auto; }
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 860px) {
+  .brand-copy { display: none; }
+}
+
+@media (max-width: 860px) {
+  .sidebar { padding: 0 12px; gap: 4px; }
+  .timer-presence-task { display: none; }
+  .timer-presence-content { width: auto; }
+  .content { padding: 8px 16px 24px; }
+  .daily-command { grid-template-columns: repeat(3, 1fr); }
+  .planning-summary { grid-template-columns: repeat(2, 1fr); }
+  #planningView .planning-summary { grid-template-columns: repeat(2, 1fr); }
+  .plan-top { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .plan-control:first-child, .plan-buttons { grid-column: 1 / -1; }
+  .variance-chart-head, .variance-row { grid-template-columns: 160px minmax(200px, 1fr) 150px; gap: 12px; }
+  .forecast-row { grid-template-columns: 160px repeat(var(--forecast-days), 64px) 120px; }
+}
+
+@media (max-width: 620px) {
+  :root { --bar-height: 108px; --week-name-col: 190px; --month-name-col: 170px; }
+  :root:has(#saveDock[hidden]) { --bar-height: 56px; }
+  .sidebar { height: auto; min-height: var(--bar-height); flex-wrap: wrap; gap: 4px; padding: 4px 8px; }
+  .brand { padding-right: 0; }
+  .brand::before { width: 28px; height: 28px; flex-basis: 28px; }
+  .side-nav { flex: 0 0 auto; gap: 2px; }
+  .sidebar md-outlined-segmented-button-set.calendar-modes { width: 114px; margin-left: 2px; --md-outlined-segmented-button-container-height: 32px; }
+  .nav-button { flex: 0 0 auto; min-width: 0; height: 36px; padding: 0 6px; font-size: .8125rem; white-space: nowrap; }
+  .sidebar-spacer { display: none; }
+  .timer-presence-meta { display: none; }
+  .save-dock { margin-left: auto; }
+  .history-actions { gap: 0; }
+  .app-settings-dialog { width: min(640px,100%); max-height: calc(100dvh - 24px); border-radius: var(--radius); }
+
+  .app-settings-footer { padding: 12px 16px 16px; }
+  .content { padding: 8px 12px 24px; }
+  .view-header { flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+  .calendar-command { order: 10; flex: 1 1 100%; margin-left: 0; }
+  .period-picker { font-size: .875rem; }
+  .period-picker-label { display: none; }
+  .period-picker-label.is-short { display: inline; }
+  .calendar-command { gap: 0; }
+  .calendar-command md-icon-button.period-arrow { width: 32px; --md-icon-button-state-layer-width: 32px; }
+  .period-picker { margin-left: 0; padding: 0 2px 0 6px; }
+  .view-header h1 { font-size: 1.25rem; }
+  .header-actions { margin-left: auto; }
+  .header-actions small { display: none; }
+  .daily-command { grid-template-columns: 1fr 1fr; }
+  #dailyView .daily-command { grid-template-columns: 1fr 1fr; }
+  .metric:last-child { grid-column: 1 / -1; }
+  .date-command, .metric, .summary-card { padding: 14px 16px; }
+  .date-input { min-width: 0; width: auto; flex: 1; font-size: 16px; }
+  .metric-value, .summary-value { font-size: 1.5rem; }
+  .shortcut { display: none; }
+  .task-board { overflow: visible; }
+  .task-table { min-width: 0; }
+  .task-table thead { display: none; }
+  .task-table, .task-table tbody, .work-card { display: block; width: 100%; }
+  .work-card {
+    display: grid;
+    grid-template-columns: 48px repeat(3, minmax(0, 1fr));
+    gap: 10px 12px;
+    align-items: center;
+    padding: 12px 16px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .work-card td,
+  .work-card td.task-col-handle,
+  .work-card td.task-col-done,
+  .work-card td.task-col-num,
+  .work-card td.row-actions { display: block; height: auto; padding: 0; border: 0; background: transparent; text-align: left; }
+  .work-card:hover,
+  .work-card:focus-within { background: var(--surface-2); }
+  .work-card:hover td,
+  .work-card:focus-within td { background: transparent; }
+  .work-card > .task-col-handle { grid-column: 1; grid-row: 1; }
+  .work-card > .task-col-done { grid-column: 1; grid-row: 2; justify-self: center; }
+  .work-card > .task-issue-cell { grid-column: 2 / 4; grid-row: 1; }
+  .work-card > .row-actions { display: flex; grid-column: 4; grid-row: 1; justify-content: flex-end; align-items: center; }
+  .work-card > .task-origin-cell { grid-column: 2 / 4; grid-row: 2; }
+  .work-card > .task-status-cell { grid-column: 4; grid-row: 2; justify-self: end; }
+  .work-card > .task-project-cell { grid-column: 1 / -1; grid-row: 3; }
+  .work-card > .today-cell { grid-column: 1 / -1; grid-row: 4; }
+  .work-card > .previous-cell { grid-column: 2; grid-row: 5; }
+  .work-card > .estimate-cell { grid-column: 3 / -1; grid-row: 5; }
+  .task-project-cell::before,
+  .field-cell::before { display: block; margin-bottom: 4px; color: var(--faint); font-size: .75rem; font-weight: 500; }
+  .task-project-cell::before { content: 'プロジェクト'; }
+  .today-cell::before { content: '本日実績'; }
+  .today-stepper { width: 100%; }
+  .today-stepper md-outlined-text-field.today-value { flex: 1 1 auto; width: auto; }
+  .previous-cell::before { content: '前日まで'; }
+  .estimate-cell::before { content: '予定工数'; }
+  .task-col-num,
+  .task-col-num input.field,
+  .work-card .synced-hours { width: 100%; margin-right: 0; margin-left: 0; text-align: left; justify-content: flex-start; }
+  .task-col-num input.field { padding-right: 12px; padding-left: 12px; }
+  .task-field-label { display: block; margin-bottom: 4px; color: var(--faint); font-size: .6875rem; font-weight: 500; }
+  .period-command { width: 100%; }
+  
+  
+  .period-input { min-width: 0; flex: 1; width: auto; font-size: 16px; }
+  .planning-summary { grid-template-columns: 1fr 1fr; }
+  #planningView .planning-summary { grid-template-columns: 1fr 1fr; }
+  .planning-summary .summary-card.is-secondary { display: none; }
+  .plan-board-head, .variance-head { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .plan-top { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .subtask-row { grid-template-columns: 1fr 80px 36px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .subtask-row .subtask-title, .subtask-row .subtask-due, .subtask-row .subtask-status, .subtask-row .subtask-note { grid-column: 1 / -1; }
+  .plan-save { flex-direction: column; align-items: stretch; }
+  .plan-save .primary-button { width: 100%; }
+  .variance-chart-head { display: none; }
+  .variance-row { grid-template-columns: minmax(0,1fr) 120px; gap: 8px 12px; padding: 12px 0; }
+  .variance-track { grid-column: 1 / -1; grid-row: 2; }
+  .forecast-row { grid-template-columns: 132px repeat(var(--forecast-days), 58px) 108px; }
+  .planning-storage { flex-direction: column; align-items: stretch; }
+  .projects-header { align-items: stretch; }
+  .project-period-command { width: 100%; }
+  .project-period-command .period-input { min-width: 0; flex: 1; width: auto; font-size: 16px; }
+  .project-period-command .primary-button { width: 100%; }
+  .project-summary { grid-template-columns: 1fr 1fr; }
+  .project-card { padding: 16px; }
+  .project-card-head { flex-direction: column; }
+  .project-card-actions { width: 100%; justify-content: flex-start; }
+  .project-metrics { grid-template-columns: 1fr 1fr; }
+  .project-month-editor { grid-template-columns: 1fr; align-items: stretch; }
+
+  .project-issue-row { grid-template-columns: minmax(0,1fr) auto; gap: 4px 10px; }
+  .project-issue-hours { text-align: right; }
+  .project-issue-status { justify-self: start; }
+  .project-dialog-fields { padding: 16px; }
+  .plan-dialog-grid { grid-template-columns: 1fr; }
+  .plan-dialog-primary { grid-template-columns: 1fr; }
+  .daily-plan-board-head,
+  .daily-plan-board-row { grid-template-columns: minmax(0, 1fr) 96px 72px; gap: 8px; padding-right: 16px; padding-left: 16px; }
+  .plan-dialog-title-block,
+  .plan-dialog-toolbar { padding-right: 0; padding-left: 0; }
+  .plan-dialog-row { grid-template-columns: 1fr; }
+  .plan-dialog-ico { display: none; }
+  
+  
+  .toast { left: 12px; right: 12px; bottom: 16px; max-width: none; }
+  .daily-plan-panel { right: 12px; bottom: 72px; left: 12px; width: auto; max-height: calc(100vh - 92px); }
+  .daily-plan-panel-actions { flex-wrap: wrap; }
+  .daily-plan-panel-actions .ghost-button { flex: 1; }
+  .add-row-group { grid-template-columns: 1fr; }
+  button.add-row.is-side { border-left: 0; border-top: 1px solid var(--line); }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+#planContextMenuAnchor { position: fixed; z-index: 800; width: 0; height: 0; pointer-events: none; }
+md-dialog.app-dialog {
+  z-index: 700;
+  width: min(640px, calc(100% - 48px));
+  max-width: min(640px, calc(100% - 48px));
+  max-height: min(760px, calc(100% - 48px));
+  --md-dialog-container-color: var(--surface);
+  --md-dialog-container-shape: 28px;
+}
+md-dialog#candidateDialog,
+md-dialog#appSettingsDialog,
+md-dialog.plan-dialog {
+  width: min(760px, calc(100% - 48px));
+  max-width: min(760px, calc(100% - 48px));
+}
+md-dialog#planDialog {
+  max-height: min(920px, calc(100vh - 48px));
+}
+/* スクロールはダイアログ本体（タイトルとボタンを固定して中身だけ動かす）に任せ、中身には付けない。
+   中身にも付けると、画面が低いときにスクロールバーが二重になる。 */
+md-dialog#planDialog .plan-dialog-fields {
+  max-height: none;
+  overflow: visible;
+}
+.dialog-headline { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
+.dialog-title { font-size: 1.25rem; font-weight: 500; line-height: 1.3; }
+md-dialog .dialog-actions,
+md-dialog .plan-dialog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; width: 100%; }
+md-dialog .dialog-actions { padding: 12px 24px 20px; }
+md-dialog .plan-dialog-actions { padding: 14px 20px 18px; }
+md-dialog .plan-dialog-actions .danger-button { margin-right: auto; }
+
+md-icon-button.week-add {
+  --md-icon-button-icon-color: var(--blue);
+  --md-icon-button-hover-icon-color: var(--blue);
+  --md-icon-button-focus-icon-color: var(--blue);
+  --md-icon-button-pressed-icon-color: var(--blue);
+}
+md-icon-button.icon-button.timer {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  outline: none;
+  --md-icon-button-icon-size: 24px;
+  --md-icon-button-icon-color: var(--faint);
+  --md-icon-button-hover-icon-color: var(--blue);
+  --md-icon-button-focus-icon-color: var(--faint);
+  --md-icon-button-pressed-icon-color: var(--blue);
+  --md-icon-button-state-layer-width: 40px;
+  --md-icon-button-state-layer-height: 40px;
+  --md-icon-button-state-layer-shape: 9999px;
+}
+md-icon-button.icon-button.timer.is-running,
+md-icon-button.icon-button.timer.is-paused {
+  --md-icon-button-icon-color: var(--blue);
+  --md-icon-button-hover-icon-color: var(--blue);
+  --md-icon-button-focus-icon-color: var(--blue);
+  --md-icon-button-pressed-icon-color: var(--blue);
+}
+md-icon-button.timer-icon {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  outline: none;
+  --md-icon-button-state-layer-width: 40px;
+  --md-icon-button-state-layer-height: 40px;
+  --md-icon-button-state-layer-shape: 9999px;
+  --md-icon-button-icon-color: var(--muted);
+  --md-icon-button-hover-icon-color: var(--ink);
+  --md-icon-button-focus-icon-color: var(--muted);
+  --md-icon-button-pressed-icon-color: var(--ink);
+}
+md-icon-button.drag-handle,
+md-icon-button.span-priority-handle { --md-icon-button-icon-color: var(--muted); }
+md-icon-button.drag-handle {
+  --md-icon-button-icon-color: var(--line-strong);
+  --md-icon-button-hover-icon-color: var(--muted);
+  --md-icon-button-focus-icon-color: var(--muted);
+  --md-icon-button-pressed-icon-color: var(--ink);
+  --md-icon-button-icon-size: 24px;
+  --md-icon-button-hover-state-layer-opacity: 0;
+  --md-icon-button-pressed-state-layer-opacity: 0;
+}
+.work-card:hover md-icon-button.drag-handle { --md-icon-button-icon-color: var(--muted); }
+md-icon-button.span-priority-handle { --md-icon-button-icon-color: var(--muted); }
+
+md-icon-button:focus,
+md-icon-button:focus-visible { outline: none; }
+.busy md-circular-progress { --md-circular-progress-size: 28px; --md-circular-progress-active-indicator-color: var(--blue); }
+md-filled-tonal-button.timer-presence {
+  --md-filled-tonal-button-container-height: 40px;
+  --md-filled-tonal-button-leading-space: 8px;
+  --md-filled-tonal-button-trailing-space: 8px;
+  --md-filled-tonal-button-container-shape: var(--radius-pill);
+  --md-filled-tonal-button-container-color: transparent;
+  --md-filled-tonal-button-label-text-color: var(--muted);
+  --md-filled-tonal-button-label-text-size: .75rem;
+  border: 0;
+  background: transparent;
+}
+.task-col-num md-outlined-text-field.today-value {
+  display: flex;
+  align-items: stretch;
+  width: 72px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+  --md-outlined-text-field-top-space: 1px;
+  --md-outlined-text-field-bottom-space: 1px;
+  --md-outlined-text-field-leading-space: 8px;
+  --md-outlined-text-field-trailing-space: 8px;
+  --md-outlined-text-field-input-text-color: var(--recorded-hours-color);
+  --md-outlined-text-field-outline-color: var(--recorded-hours-line);
+  --md-outlined-text-field-input-text-size: .875rem;
+  --md-outlined-text-field-input-text-line-height: 30px;
+  --md-outlined-field-top-space: 1px;
+  --md-outlined-field-bottom-space: 1px;
+  --md-outlined-field-leading-space: 8px;
+  --md-outlined-field-trailing-space: 8px;
+  --md-outlined-field-outline-label-padding: 0px;
+  --md-outlined-field-content-size: .875rem;
+  --md-outlined-field-content-line-height: 30px;
+}
+
+md-dialog#appSettingsDialog { width: min(880px, calc(100% - 48px)); max-width: min(880px, calc(100% - 48px)); }
+@media (max-width: 600px) {
+  md-dialog#appSettingsDialog { width: calc(100% - 24px); max-width: calc(100% - 24px); }
+  .settings-layout { grid-template-columns: 112px minmax(0, 1fr); height: min(560px, calc(100dvh - 220px)); }
+  .settings-nav { padding-right: 8px; }
+  .settings-nav-label { margin-left: 8px; }
+  
+  .settings-panel { padding-left: 14px; }
+  .settings-panel h2 { font-size: 1rem; }
+  .settings-check-row { flex-direction: column; gap: 8px; }
+  .settings-panel-actions { flex-direction: column; align-items: stretch; }
+  .google-tasks-list-label { flex-wrap: wrap; }
+}
+
+#googleTasksNewListTitle { margin-top: 12px; }
+.settings-group .google-tasks-scope-note { margin-top: 14px; }
+
+/* Project layouts keep summaries and monthly controls readable at every width. */
+.projects-header { flex-wrap: wrap; align-items: flex-start; gap: 16px 24px; }
+.projects-header > div:first-child { flex: 1 1 340px; min-width: 0; }
+.projects-header p { line-height: 1.6; }
+.project-period-command { margin-left: auto; }
+.project-card-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.project-card-title { gap: 6px 8px; }
+.project-card-copy > p { line-height: 1.65; }
+.project-meta { line-height: 1.6; }
+.project-status, .project-card .weekly-status { white-space: nowrap; }
+.project-summary .summary-card { min-width: 0; }
+.project-summary .summary-value { flex-wrap: wrap; overflow-wrap: anywhere; }
+#projectsView .section-heading p { max-width: 70ch; line-height: 1.65; }
+
+@media (min-width: 701px) and (max-width: 1100px) {
+  .project-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .project-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .project-summary .summary-card:last-child { grid-column: span 2; }
+  .project-metric:last-child { grid-column: span 2; }
+}
+@media (max-width: 700px) {
+  .project-period-command { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px auto; width: 100%; margin-left: 0; }
+  .project-period-command .primary-button { grid-column: 1 / -1; }
+  .project-period-command .period-input { width: 100%; }
+  .project-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-summary .summary-card.is-secondary { display: block; }
+  .project-summary .summary-card:last-child { grid-column: 1 / -1; }
+  .project-card-head { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .project-card-actions { justify-content: flex-start; }
+  .project-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-metric:last-child { grid-column: 1 / -1; }
+  .project-month-editor { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .project-issue-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .project-issue-name { grid-column: 1 / -1; }
+  .project-issue-status { justify-self: start; }
+}
+
+@media (hover: none) { .week-add { opacity: 1; } }
+
+/* ---------- 週の画面の上部の集計（予定・実績・状態） ----------
+   大きなカードだと週の表を押し下げるわりに見られないので、1行の帯にまとめる。 */
+#planningView .planning-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 28px;
+  margin: 0 0 12px;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+#planningView .planning-summary .summary-card,
+#planningView .planning-summary .summary-card.is-secondary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+#planningView .planning-summary .summary-label { display: inline; }
+#planningView .planning-summary .summary-value { font-size: 1rem; font-weight: 500; }
+#planningView .planning-summary .summary-value small { font-size: .75rem; }
+#planningView .planning-summary .summary-meta { display: inline; margin: 0; }
+
+/* ---------- 予定のダイアログ ----------
+   1行の入力欄の高さを40pxにそろえ、状態・工数・プロジェクトを1行に並べる。説明は対象の欄のすぐ下に置く。 */
+.plan-dialog-meta:empty { display: none; }
+.plan-dialog-meta { margin: 8px 0 0; padding: 0; background: transparent; }
+.plan-dialog-toolbar:has(> .plan-dialog-priority[hidden]:only-child) { display: none; }
+.plan-dialog-primary { gap: 16px; }
+.plan-dialog-primary .field,
+.plan-dialog-primary #planDialogPlanned,
+.plan-project-section .field { min-height: 0; }
+.plan-dialog-primary input.field[type="date"] { height: 40px; min-height: 40px; padding: 0 12px; }
+.plan-dialog-period .plan-dialog-hint { margin-top: 2px; }
+.plan-dialog-primary .plan-dialog-attrs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; align-items: start; }
+.plan-dialog-attrs .field { width: 100%; }
+#planDialogProjectHint { margin-top: -12px; }
+@media (max-width: 640px) {
+  .plan-dialog-primary .plan-dialog-attrs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .plan-dialog-attrs .plan-project-select { grid-column: 1 / -1; }
+}
+/* 予定名の枠に重なるラベルが上端で切れないよう、上に余白を取る。 */
+md-dialog#planDialog .plan-dialog-fields { padding-top: 8px; }
+.plan-dialog-toolbar { padding: 0 0 12px; }
+.plan-dialog-priority .ghost-button { --md-outlined-button-container-height: 32px; --md-outlined-button-leading-space: 12px; --md-outlined-button-trailing-space: 12px; --md-outlined-button-label-text-size: .8125rem; }
+
+/* ---------- 機能の説明（ⓘ） ---------- */
+.ui-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin: 0 0 0 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--faint);
+  vertical-align: middle;
+  cursor: help;
+}
+.ui-tip .material-symbols-outlined { font-size: 16px; }
+.ui-tip:hover, .ui-tip:focus-visible { color: var(--blue); background: var(--control-hover); outline: 0; }
+.ui-tip-bubble {
+  position: fixed;
+  z-index: 2000;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: var(--surface);
+  font-size: .75rem;
+  font-weight: 400;
+  line-height: 1.6;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+.ui-tip-bubble[hidden] { display: none; }
+
+/* ---------- スマホ（PCの表をそのまま縮めず、スマホ用に組み直す） ---------- */
+@media (max-width: 620px) {
+  /* アプリバーは1行。「‹ 期間 ›」と今日・表示メニュー・設定だけにし、ロゴと編集履歴・保存のアイコンは出さない（自動保存のため）。 */
+  :root { --bar-height: 56px; }
+  :root:has(#saveDock[hidden]) { --bar-height: 56px; }
+  .sidebar { height: var(--bar-height); min-height: 0; flex-wrap: nowrap; gap: 0; padding: 0 4px 0 8px; }
+  .brand, .save-dock, .sidebar-spacer { display: none; }
+  .calendar-command { order: 0; flex: 1 1 auto; min-width: 0; margin-left: 0; gap: 0; }
+  #calendarPrev { order: 1; }
+  .period-picker { order: 2; min-width: 0; padding: 0 2px 0 4px; font-size: .9375rem; }
+  #calendarNext { order: 3; }
+  #calendarToday { order: 4; margin-left: auto; --md-outlined-button-leading-space: 12px; --md-outlined-button-trailing-space: 12px; --md-outlined-button-container-height: 32px; }
+  .calendar-command md-icon-button.period-arrow { width: 36px; --md-icon-button-state-layer-width: 36px; }
+  .view-menu-wrap { margin-left: auto; padding-left: 4px; }
+  md-outlined-button.view-menu-button { min-width: 0; height: 32px; --md-outlined-button-container-height: 32px; --md-outlined-button-with-trailing-icon-leading-space: 12px; --md-outlined-button-with-trailing-icon-trailing-space: 4px; }
+  .date-picker { left: -4px; }
+  .content { padding: 8px 8px 24px; }
+
+  /* 日：ToDoリスト風。行は「○ 作業名 / 親の課題名　時間」だけを読む形にし、押すと下からシートで編集する。 */
+  .timer-ribbon { min-height: 0; margin-bottom: 12px; padding: 8px 8px 8px 12px; }
+  .timer-ribbon.is-idle { display: none; }
+  #dailyView .section-heading { margin: 4px 4px 12px; }
+  #dailyView .section-heading h2 { color: var(--muted); font-size: .875rem; font-weight: 500; }
+  #dailyView .section-heading p:not(.daily-mobile-total) { display: none; }
+  .daily-mobile-total { display: flex; align-items: baseline; gap: 4px; margin: 2px 0 0; }
+  .daily-mobile-total b { color: var(--ink); font-size: 2rem; font-weight: 400; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .daily-mobile-total span { color: var(--muted); font-size: .875rem; }
+  .task-table thead { display: none; }
+  .task-board { border-radius: var(--radius); }
+  .work-card {
+    grid-template-columns: 48px minmax(0, 1fr) 56px auto;
+    grid-template-areas: "done issue today remaining" "done meta today remaining";
+    gap: 0 8px;
+    align-items: center;
+    min-height: 60px;
+    padding: 8px 16px 8px 0;
+    cursor: pointer;
+  }
+  .work-card > td.task-col-handle, .work-card > td.task-origin-cell, .work-card > td.task-status-cell,
+  .work-card > td.previous-cell, .work-card > td.estimate-cell, .work-card > td.row-actions,
+  .work-card > td.task-project-cell, .work-card .task-field-label, .work-card .interrupt-name-edit,
+  .work-card .today-step, .work-card .recorded-mark { display: none; }
+  .work-card > td.task-col-done { grid-area: done; justify-self: center; }
+  .work-card > td.task-issue-cell { grid-area: issue; min-width: 0; }
+  .work-card > td.today-cell { grid-area: today; display: flex; align-items: center; }
+  .work-card > td.remaining-cell { grid-area: remaining; padding: 0; text-align: right; }
+  .work-card > td.remaining-cell::before { content: none; }
+  .work-card .remaining-cell .daily-remaining { width: auto; height: auto; padding: 0; color: var(--muted); font-size: .9375rem; line-height: 30px; }
+  .work-card .remaining-cell .daily-remaining.is-over { color: var(--danger); }
+  .work-card:has(.task-issue-text) > td.task-issue-cell,
+  .work-card:has(.task-issue-text) .task-issue-wrap,
+  .work-card:has(.task-issue-text) .task-issue-text { display: contents; }
+  .work-card .task-issue-text strong { grid-area: issue; min-width: 0; overflow: hidden; font-size: 1rem; font-weight: 400; line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
+  .work-card .task-issue-text small { grid-area: meta; min-width: 0; overflow: hidden; color: var(--faint); font-size: .8125rem; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+  .work-card:not(:has(.task-issue-text)) > td.task-issue-cell { grid-row: 1 / 3; align-self: center; }
+  .work-card .interrupt-name-field { min-width: 0; pointer-events: none; }
+  .work-card .interrupt-name { min-width: 0; height: 22px; padding: 0; border: 0; color: var(--ink); background: transparent; font-size: 1rem; text-decoration: none; }
+  /* 完了の丸。押すと完了・取り消し（行のほかの場所はシートを開く）。 */
+  .work-card md-checkbox.done-check { --md-checkbox-container-shape: 50%; --md-checkbox-outline-color: var(--line-strong); }
+  .work-card:has(md-checkbox.done-check[checked]) .task-issue-text strong,
+  .work-card:has(md-checkbox.done-check[checked]) .interrupt-name { color: var(--faint); text-decoration: line-through; }
+  /* 時間は文字として読むだけ（編集はシートで）。 */
+  .work-card .today-stepper { width: auto; gap: 0; pointer-events: none; }
+  .work-card .today-stepper md-outlined-text-field.today-value {
+    flex: 0 0 auto; width: 52px; text-align: right;
+    --md-outlined-field-outline-color: transparent; --md-outlined-text-field-outline-color: transparent;
+    --md-outlined-text-field-input-text-size: .9375rem; --md-outlined-text-field-input-text-color: var(--muted);
+    --md-outlined-text-field-leading-space: 0; --md-outlined-text-field-trailing-space: 0;
+    --md-outlined-field-leading-space: 0; --md-outlined-field-trailing-space: 0;
+  }
+  .work-card .today-stepper::after { content: 'h'; margin-left: 1px; color: var(--muted); font-size: .8125rem; }
+  .work-card > td.today-cell::before { content: none; }
+  .add-row-group { grid-template-columns: 1fr; }
+  .add-row-group .add-row { justify-content: center; }
+
+  /* 行を押すと下から出る編集シート。 */
+  .daily-sheet-backdrop { position: fixed; inset: 0; z-index: 300; background: rgba(32,33,36,.32); }
+  .daily-sheet { position: fixed; right: 0; bottom: 0; left: 0; z-index: 301; display: grid; gap: 16px; max-height: 80dvh; overflow: auto; padding: 8px 20px calc(20px + env(safe-area-inset-bottom)); border-radius: var(--radius) var(--radius) 0 0; background: var(--surface); box-shadow: var(--shadow-lg); }
+  .daily-sheet-handle { justify-self: center; width: 32px; height: 4px; border-radius: 2px; background: var(--line-strong); }
+  .daily-sheet-title { display: grid; gap: 2px; }
+  .daily-sheet-title strong { font-size: 1.125rem; font-weight: 500; }
+  .daily-sheet-title small { color: var(--faint); font-size: .875rem; }
+  .daily-sheet-name { display: grid; gap: 4px; color: var(--faint); font-size: .75rem; }
+  .daily-sheet-name input { height: 40px; padding: 0 12px; font-size: 1rem; }
+  .daily-sheet-hours { display: flex; align-items: center; justify-content: center; gap: 16px; }
+  .daily-sheet-hours md-icon-button { width: 48px; height: 48px; --md-icon-button-state-layer-width: 48px; --md-icon-button-state-layer-height: 48px; --md-icon-button-icon-size: 24px; --md-icon-button-icon-color: var(--ink); border-radius: 50%; background: var(--surface-2); }
+  .daily-sheet-hours label { display: flex; align-items: baseline; gap: 4px; }
+  .daily-sheet-hours input { width: 96px; padding: 4px 0; border: 0; border-bottom: 2px solid var(--line-strong); color: var(--ink); background: transparent; font: inherit; font-size: 2rem; text-align: center; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+  .daily-sheet-hours input:focus { border-bottom-color: var(--blue); outline: none; }
+  .daily-sheet-hours input::-webkit-outer-spin-button, .daily-sheet-hours input::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
+  .daily-sheet-hours label span { color: var(--muted); font-size: .875rem; }
+  .daily-sheet-actions { display: flex; align-items: center; gap: 8px; }
+  .daily-sheet-actions [data-sheet-remove] { margin-left: auto; }
+
+  /* ---- スマホ共通の見た目（日の画面に合わせる） ----
+     見出しは小さい灰色、一覧は「名前 / 2行目は灰色」と右端の値、状態は色付きの文字、追加は一覧の最後の行。 */
+  .week-board, .month-board, .task-board { border-radius: var(--radius); }
+  .week-board .plan-board-head, .month-board .plan-board-head { padding: 14px 16px 10px; border-bottom: 0; }
+  .week-board .plan-board-head h2, .month-board .plan-board-head h2 { color: var(--muted); font-size: .875rem; font-weight: 500; }
+  .week-board .plan-board-head p, .month-board .plan-board-head p, .week-board #addPlan { display: none; }
+  .week-board .timeline-load-status, .week-board .plan-save, .month-board .timeline-load-status, .month-board .plan-save { display: none; }
+  .week-mobile-plans, .month-mobile { display: grid; }
+  .mobile-list-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "title trailing" "sub sub" "progress progress";
+    align-items: baseline;
+    gap: 2px 12px;
+    min-height: 60px;
+    padding: 10px 16px;
+    border: 0;
+    border-top: 1px solid var(--line);
+    color: var(--ink);
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .mobile-list-row:hover { background: var(--surface-2); }
+  .mobile-row-title { grid-area: title; min-width: 0; overflow: hidden; font-size: 1rem; line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-list-row.is-done .mobile-row-title { color: var(--faint); text-decoration: line-through; }
+  .mobile-row-trailing { grid-area: trailing; color: var(--muted); font-size: .9375rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mobile-row-trailing small { color: var(--faint); font-size: .75rem; }
+  .mobile-row-trailing.is-over { color: var(--danger); }
+  .mobile-row-sub { grid-area: sub; display: flex; min-width: 0; gap: 8px; overflow: hidden; color: var(--faint); font-size: .8125rem; line-height: 18px; white-space: nowrap; }
+  .mobile-status { flex: 0 0 auto; font-weight: 500; }
+  .mobile-status.is-ok { color: var(--ok); }
+  .mobile-status.is-ahead { color: var(--blue); }
+  .mobile-status.is-alert { color: var(--danger); }
+  .mobile-status.is-done { color: var(--faint); }
+  .mobile-row-progress { grid-area: progress; display: block; height: 3px; margin-top: 6px; overflow: hidden; border-radius: 2px; background: var(--surface-3); }
+  .mobile-row-progress > span { display: block; height: 100%; background: var(--plan); }
+  .mobile-row-progress.is-over > span { background: var(--danger); }
+  .mobile-add-row { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 16px; border: 0; border-top: 1px solid var(--line); color: var(--blue); background: transparent; font: inherit; font-size: .875rem; font-weight: 500; text-align: left; cursor: pointer; }
+  .mobile-add-row .material-symbols-outlined { font-size: 20px; }
+  .add-row-group .add-row { justify-content: center; }
+
+  /* 週：7日分の実績の帯と予定のリスト。 */
+  .week-mobile-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 0 8px 10px; }
+  .week-mobile-day { display: grid; justify-items: center; gap: 2px; padding: 6px 0; border: 0; border-radius: var(--radius-md); color: var(--ink); background: transparent; font: inherit; cursor: pointer; }
+  .week-mobile-day:hover { background: var(--control-hover); }
+  .week-mobile-day small { color: var(--faint); font-size: .6875rem; }
+  .week-mobile-day.is-saturday small { color: #4267a3; }
+  .week-mobile-day.is-sunday small { color: var(--danger); }
+  .week-mobile-day strong { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; font-size: .9375rem; font-weight: 500; }
+  .week-mobile-day.is-today strong { color: var(--on-fill); background: var(--blue); }
+  .week-mobile-day span { color: var(--muted); font-size: .6875rem; font-variant-numeric: tabular-nums; }
+
+  /* 月：プロジェクトごとの予定のリスト。プロジェクト名は小さい灰色の見出し。絞り込みは名前の検索だけ。 */
+  #monthFilterProject, #monthFilterStatus, .month-filter-toggle, #clearMonthFilter { display: none; }
+  .month-filter { padding: 0 16px 8px; }
+  .month-mobile-group { display: flex; align-items: center; gap: 4px; padding: 16px 16px 6px; border: 0; border-top: 1px solid var(--line); color: var(--muted); background: transparent; font: inherit; text-align: left; cursor: pointer; }
+  .month-mobile-group strong { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: .8125rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+  .month-mobile-group small { color: var(--faint); font-size: .75rem; }
+  .month-mobile-group .material-symbols-outlined { color: var(--faint); font-size: 18px; }
+  .month-mobile-group + .mobile-list-row { border-top: 0; }
+
+  /* プロジェクト：見出しは小さい灰色、数値はカードをやめてラベルと大きい数字で並べる。 */
+  .projects-header h1 { color: var(--muted); font-size: .875rem; font-weight: 500; }
+  .projects-header > div:first-child p { display: none; }
+  .project-period-command { display: flex; flex-wrap: wrap; align-items: center; width: 100%; gap: 4px; }
+  .project-period-command .period-input { flex: 1 1 0; min-width: 0; width: auto; }
+  .projects-header .project-period-command md-filled-button#addProject { flex: 0 0 auto; width: auto; min-width: 0; margin-right: auto; }
+  .project-period-command::after { content: ''; flex: 1 1 100%; order: 9; }
+  .project-summary { grid-template-columns: 1fr 1fr; gap: 12px 16px; padding: 4px 4px 8px; }
+  .project-summary .summary-card { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .project-summary .summary-card#projectStatusSummary, .project-summary .summary-card:last-child { display: none; }
+  .project-summary .summary-label { color: var(--muted); font-size: .75rem; }
+  .project-summary .summary-value { font-size: 1.5rem; font-weight: 400; }
+  .project-summary .summary-meta { font-size: .75rem; }
+  .project-card .weekly-status, .project-card .project-status { padding: 0; border: 0; background: transparent; font-weight: 500; }
+  /* 登録のボタンは、日・週の「＋ 〜を追加」と同じ文字の行にそろえる。 */
+  #addProject, .project-card-actions [data-project-action="issue"] {
+    --md-filled-button-container-color: transparent;
+    --md-filled-button-label-text-color: var(--blue);
+    --md-filled-button-hover-label-text-color: var(--blue);
+    --md-filled-button-focus-label-text-color: var(--blue);
+    --md-filled-button-pressed-label-text-color: var(--blue);
+    --md-filled-button-container-elevation: 0;
+    --md-filled-button-hover-container-elevation: 0;
+    --md-filled-button-leading-space: 4px;
+    justify-content: flex-start;
+  }
+  #addProject::before, .project-card-actions [data-project-action="issue"]::before { content: '＋'; margin-right: 6px; color: var(--blue); }
+}
+
+/* ダイアログの閉じるボタンは、開いたときのキーボード用の枠を細い青にする（黒い太い丸が出ないように）。 */
+md-icon-button.dialog-close { --md-focus-ring-color: var(--blue); --md-focus-ring-width: 2px; --md-focus-ring-outward-offset: 0px; }
+
+/* ---------- スマホ：ダイアログとヘッダーの仕上げ ---------- */
+@media (max-width: 620px) {
+  /* ヘッダー：「今週」は枠なしの文字ボタンにして、表示メニュー（枠あり）と見分けやすくする。 */
+  #calendarToday { --md-outlined-button-outline-color: transparent; --md-outlined-button-label-text-color: var(--blue); }
+  .sidebar { gap: 2px; }
+
+  /* ダイアログは全画面（Material 3 のスマホ向けの形）。見出しとボタンを固定し、中身だけをスクロールする。 */
+  md-dialog.app-dialog,
+  md-dialog#candidateDialog,
+  md-dialog#appSettingsDialog,
+  md-dialog.plan-dialog,
+  md-dialog#planDialog {
+    width: 100vw;
+    max-width: 100vw;
+    min-width: 0;
+    height: 100dvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    --md-dialog-container-shape: 0;
+  }
+  md-dialog .dialog-headline { gap: 8px; }
+  md-dialog .dialog-title { font-size: 1.125rem; }
+  md-dialog .dialog-actions,
+  md-dialog .plan-dialog-actions { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+
+  /* 設定：左のメニューをやめ、上に横並びのタブ。中身は全幅。 */
+  .settings-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+  .settings-nav { display: flex; gap: 4px; overflow-x: auto; padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+  .settings-nav-group { display: contents; }
+  .settings-nav-group + .settings-nav-group { margin-top: 0; }
+  .settings-nav-label { display: none; }
+  .settings-nav .ui-navigation-item { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; }
+  .settings-nav .ui-navigation-item * { white-space: nowrap; }
+  .settings-panel { padding: 16px 0 24px; }
+  .settings-panel md-outlined-button, .settings-panel md-filled-button { max-width: 100%; }
+
+  /* 課題を選ぶ：1件を「チェック・名前」と「時間・期間」の2行に。 */
+  #candidateDialog .candidate-week { max-height: none; }
+  .candidate { grid-template-columns: 24px minmax(0, 1fr); gap: 2px 12px; padding: 10px 12px; }
+  .candidate > :nth-child(n+3) { grid-column: 2; }
+  .candidate strong { font-size: .9375rem; font-weight: 400; overflow-wrap: anywhere; }
+  .candidate-hours { display: flex; flex-wrap: wrap; justify-items: start; gap: 2px 8px; min-width: 0; }
+  .candidate-flat { flex-wrap: wrap; }
+  .candidate-flat > :not(.candidate) { margin-left: 36px; }
+  .candidate-group-items { margin-left: 8px; }
+}
+
+/* タブレット・狭いPCでは実績を複数段にし、名前と操作を横スクロールなしで使う。 */
+@media (min-width: 621px) and (max-width: 1250px) {
+  .task-table, .task-table tbody { display: block; width: 100%; min-width: 0; }
+  .task-table colgroup, .task-table thead { display: none; }
+  .work-card {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 100px 180px 96px;
+    grid-template-areas: "done issue issue today actions" "handle project origin previous estimate";
+    gap: 4px 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .work-card td { min-width: 0; height: auto; padding: 0; border: 0; }
+  .work-card td.task-col-done { grid-area: done; }
+  .work-card td.task-col-handle { grid-area: handle; }
+  .work-card td.task-issue-cell { grid-area: issue; }
+  .work-card td.task-project-cell { grid-area: project; }
+  .work-card td.task-origin-cell { grid-area: origin; }
+  .work-card td.today-cell { grid-area: today; padding: 0; }
+  .work-card td.previous-cell { grid-area: previous; padding: 0; }
+  .work-card td.estimate-cell { grid-area: estimate; padding: 0; }
+  .work-card td.remaining-cell { grid-column: 4 / 6; grid-row: 3; padding: 0; text-align: right; }
+  .work-card td.row-actions { grid-area: actions; }
+  .work-card td.task-status-cell { grid-column: 2 / 4; grid-row: 3; text-align: left; }
+  .work-card .task-field-label { display: none; }
+  .work-card .task-issue-text strong { white-space: normal; overflow-wrap: anywhere; }
+  .work-card .daily-project { width: 100%; }
+  .work-card .synced-hours { display: inline; width: auto; height: auto; padding: 0; }
+  .work-card .previous-cell::before { content: '前日まで '; color: var(--faint); font-size: .75rem; }
+  .work-card .estimate-cell::before { content: '予定 '; color: var(--faint); font-size: .75rem; }
+  .work-card .today-stepper { gap: 0; }
+}
+@media (min-width: 621px) and (max-width: 1250px) {
+  .work-card {
+    grid-template-columns: 32px 40px minmax(0, 1fr) 180px 88px 88px 88px 88px;
+    grid-template-areas:
+      "handle done issue issue origin project project actions"
+      "handle done status today previous estimate remaining actions";
+    gap: 4px 8px;
+  }
+  .work-card td.task-status-cell { grid-area: status; }
+  .work-card td.remaining-cell { grid-area: remaining; text-align: center; }
+  .work-card .estimate-cell::before,
+  .work-card .previous-cell::before,
+  .work-card .today-cell::before,
+  .work-card .remaining-cell::before { display: block; margin: 0 0 2px; color: var(--faint); font-size: .75rem; line-height: 18px; text-align: center; }
+  .work-card .estimate-cell::before { content: '予定工数'; }
+  .work-card .previous-cell::before { content: '前日まで'; }
+  .work-card .today-cell::before { content: '本日実績'; }
+  .work-card .remaining-cell::before { content: '残り工数'; }
+  .work-card .synced-hours { display: flex; height: 40px; align-items: center; justify-content: center; }
+  .work-card .task-issue-text strong { white-space: nowrap; }
+}
+@media (min-width: 621px) and (max-width: 899px) {
+  .work-card { grid-template-columns: 24px 40px minmax(0, 1fr) 156px 72px 72px 72px 64px; column-gap: 4px; }
+  .work-card .daily-status { min-width: 0; padding: 0 4px; }
+  .work-card .task-origin { min-width: 0; padding: 0 4px; }
+  .work-card td.row-actions { display: flex; flex-direction: column; align-items: center; }
+  .work-card .today-step { width: 36px; --md-icon-button-state-layer-width: 36px; }
+}
+@media (min-width: 621px) and (max-width: 680px) {
+  .sidebar .brand { display: none; }
+}
+@media (min-width: 621px) and (max-width: 1050px) {
+  .brand-copy { display: none; }
+  .sidebar { gap: 4px; padding: 0 8px; }
+  .calendar-command { margin-left: 8px; gap: 0; }
+  .period-picker-label { display: none; }
+  .period-picker-label.is-short { display: inline; }
+  .period-picker { padding: 0 4px; font-size: .9375rem; }
+}
+
+/* 週の境目は曜日の区切りと週見出しで示す。 */
+.timeline-periods-segment { background: var(--surface-2); border-right: 1px solid var(--line-strong); }
+.timeline-periods-segment.is-selected-period { background: var(--surface); }
+.timeline-periods-title { font-weight: 500; }
+.week-span .is-sunday { border-right: 1px solid var(--line-strong); }
+.week-head-day.is-today { box-shadow: none; }
+.month-calendar-total { color: var(--meet); font-variant-numeric: tabular-nums; }
+.month-calendar-totals .month-day { background: #fffbef; }
+.month-calendar-totals .month-day.is-saturday, .month-calendar-totals .month-day.is-sunday, .month-calendar-totals .month-day.is-off { background: var(--surface-2); }
+.month-mobile-summary { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .8125rem; }
+.month-mobile-summary b { margin-left: 8px; color: var(--ink); font-weight: 500; }
+
+/* プロジェクトも予定画面と同じく、数値をひとまとまりの一覧で読む。 */
+#projectsView .project-summary { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-bottom: 16px; padding: 12px 20px; border-radius: var(--radius-md); background: var(--surface); }
+#projectsView .project-summary .summary-card { flex: 1 1 140px; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+#projectsView .project-summary .summary-value { margin-top: 2px; font-size: 1.5rem; }
+#projectsView .project-summary .summary-card.is-secondary:last-child { flex-basis: 100px; }
+.project-list { display: block; overflow: hidden; border-radius: var(--radius-md); background: var(--surface); }
+.project-card { padding: 20px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
+.project-card:last-child { border-bottom: 0; }
+.project-metrics { display: flex; flex-wrap: wrap; gap: 8px 32px; margin-top: 12px; }
+.project-metric { flex: 0 1 auto; padding: 0; border-radius: 0; background: transparent; }
+.project-metric strong { margin-top: 2px; }
+.project-card .project-status, .project-card .weekly-status { border-radius: var(--radius-xs); }
+.project-meta { margin-top: 4px; }
+.project-month-settings { margin-top: 12px; }
+.project-month-settings > summary { width: fit-content; padding: 8px 0; color: var(--blue); font-size: .8125rem; cursor: pointer; }
+.project-month-settings .project-month-editor { margin-top: 4px; padding-top: 12px; }
+.project-issues { margin-top: 4px; }
+@media (max-width: 700px) {
+  .project-card { padding: 16px; }
+  .project-metrics { gap: 12px 20px; }
+  .project-metric { flex-basis: calc(50% - 20px); }
+  #projectsView .project-summary .summary-card { flex-basis: calc(50% - 28px); }
+  #projectsView .project-summary .summary-card.is-secondary:last-child { flex-basis: calc(50% - 28px); }
+}
+.backlog-connection-fields { display: grid; gap: 16px; max-width: 540px; }
+.backlog-connection-fields p { margin: 0; color: var(--muted); font-size: .8125rem; }
+.backlog-import-dialog { max-width: 720px; }
+.backlog-import-toolbar { display: flex; align-items: center; gap: 8px; }
+.backlog-import-toolbar .field { flex: 1; min-width: 0; }
+#backlogImportStatus { color: var(--muted); font-size: .8125rem; }
+@media (max-width: 620px) {
+  .plan-board-head { flex-wrap: wrap; gap: 8px; }
+  .plan-board-head .forecast-head-actions { width: 100%; justify-content: flex-end; }
+}
+
+/* 月・プロジェクトタブの見た目の整理 */
+.month-name-heading > .weekly-status { padding: 0; border-radius: 0; background: transparent; font-size: .6875rem; font-weight: 500; line-height: 20px; }
+.month-name-heading > .weekly-status.is-alert { color: var(--danger); }
+.month-filter-query, .month-filter-select { --md-outlined-text-field-input-text-size: .875rem; --md-outlined-text-field-label-text-size: .875rem; --md-outlined-select-text-field-input-text-size: .875rem; --md-outlined-select-text-field-label-text-size: .875rem; --md-outlined-text-field-container-shape: 8px; }
+.month-filter { align-items: center; padding: 12px 16px; }
+.project-metric span { color: var(--muted); font-size: .75rem; }
+.project-metric strong { font-size: 1.25rem; }
+.project-list .project-card + .project-card { margin-top: 0; }
+#projectsView .section-heading { margin: 8px 0 4px; padding: 0; }
+#projectsView .section-heading h2 { font-size: 1rem; font-weight: 500; }
+
+/* ショートカットキーの設定 */
+.shortcut-list { display: grid; margin: 8px 0 12px; border: 1px solid var(--line); border-radius: var(--radius-md); }
+.shortcut-list.is-disabled { opacity: .5; }
+.shortcut-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 16px; font-size: .875rem; }
+.shortcut-row + .shortcut-row { border-top: 1px solid var(--line); }
+.shortcut-key { min-width: 72px; padding: 6px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); background: var(--surface); font: inherit; font-size: .8125rem; font-weight: 500; text-align: center; cursor: pointer; }
+.shortcut-key:hover { background: var(--surface-2); }
+.shortcut-key.is-empty { color: var(--faint); font-weight: 400; }
+.shortcut-key.is-capturing { color: var(--blue); border-color: var(--blue); background: var(--blue-tint); }
+
+.backlog-import-selectbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 8px; }
+.backlog-import-selectbar p { margin: 0; color: var(--muted); font-size: .8125rem; }
+
+/* セルの高さの整理。日次の行は56px、月のカレンダー予定と実績合計は同じ32px。 */
+.work-card td { height: 56px; padding: 6px 16px; }
+.task-board-head th { height: 40px; }
+button.add-row { height: 48px; }
+.month-day-head { padding: 4px 0; }
+.month-totals .month-day { min-height: 32px; }
+.month-totals .month-name { padding-block: 6px; }
+.month-group { min-height: 36px; }
+.month-group-toggle { padding-block: 8px; }
+.month-group-summary { padding-block: 6px; }
+.work-card .today-step { --md-icon-button-state-layer-width: 32px; --md-icon-button-state-layer-height: 32px; --md-icon-button-icon-size: 20px; }
+.work-card td.today-cell .today-stepper { display: flex; }
+/* PCでは、ボタンやチェックの周りのタップ用の余白を詰めて、行を56pxに収める（スマホは余白を残す）。 */
+@media (min-width: 621px) {
+  .work-card md-icon-button, .work-card md-checkbox { margin: 0; }
+}
+
+/* 月タブの文字サイズをそろえる: 日付の数字は13px、セルの数字は11px、補足は11px、見出しは12px。 */
+.month-calendar-total, .month-total { font-size: .6875rem; font-weight: 400; font-variant-numeric: tabular-nums; }
+.month-calendar-total { color: var(--meet); }
+.month-work-total { font-size: .6875rem; font-variant-numeric: tabular-nums; color: var(--ink); }
+.month-total { color: var(--muted); }
+.month-day-head small { font-size: .6875rem; }
+.month-group-toggle strong { font-weight: 500; }
+.month-group-summary b { font-size: .75rem; }
+.month-group-summary b small { font-size: .6875rem; }
+
+/* 週タブも月タブと同じ基準にそろえる（行のタイトル13px/500、セルの数字・補足11px）。 */
+.span-name-title { font-size: .8125rem; line-height: 20px; }
+.span-name-title b { font-weight: 500; }
+.span-actual { font-size: .6875rem; }
+.span-subtask-count { font-size: .6875rem; }
+.span-name-status .weekly-status { font-size: .6875rem; }
+
+/* 月タブの日付のセル（見出し）は、曜日と日付を詰めて40px。下のカレンダー予定・実績合計（32px）と並べて見やすくする。 */
+.month-head .month-day-head { gap: 0; padding: 3px 0; min-height: 40px; }
+.month-head .month-day-head strong { width: 22px; height: 22px; }
+.month-head .month-name { padding-block: 0; }
+
+/* ヘッダーの計測表示: 淡い青の角丸で1つのまとまりにし、時計・課題名・日付を同じ高さに揃える。隣のボタンとは間を空ける。 */
+md-filled-tonal-button.timer-presence {
+  --md-filled-tonal-button-container-height: 36px;
+  --md-filled-tonal-button-container-shape: 8px;
+  --md-filled-tonal-button-container-color: var(--blue-fill);
+  --md-filled-tonal-button-label-text-color: var(--ink);
+  --md-filled-tonal-button-label-text-size: .8125rem;
+  --md-filled-tonal-button-leading-space: 0px;
+  --md-filled-tonal-button-trailing-space: 0px;
+  margin-inline: 4px 12px;
+  background: transparent;
+}
+md-filled-tonal-button.timer-presence.is-paused { --md-filled-tonal-button-container-color: var(--warn-fill); }
+.timer-presence-content { box-sizing: border-box; width: min(340px, 26vw); padding: 0 14px 0 12px; gap: 10px; }
+.timer-presence .timer-dot { width: 8px; height: 8px; flex: 0 0 8px; }
+.timer-presence-clock { font-size: .8125rem; }
+.timer-presence-task { font-size: .8125rem; font-weight: 500; text-align: left; }
+.timer-presence-meta { font-size: .6875rem; }
+@media (max-width: 860px) {
+  .timer-presence-content { width: auto; padding: 0 12px; }
+  md-filled-tonal-button.timer-presence { margin-inline: 0; }
+}
+
+.candidate.is-imported { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.backlog-imported-body { display: grid; min-width: 0; gap: 2px; }
+.backlog-imported-body strong { color: var(--muted); font-weight: 500; }
+.backlog-diff { color: var(--warn); font-size: .75rem; }
+.backlog-diff-note { color: var(--faint); font-size: .75rem; }
+
+/* 月タブ: 押すと開く先（その日の週）を、行と列で前もって見せる。 */
+#monthGantt .month-plan .month-day.is-open-week, #monthGantt .month-day-head.is-open-week { background-color: var(--blue-tint); }
+/* 枠は予定の帯より手前に描く（帯に隠れて、一部しか見えなくならないように）。 */
+#monthGantt .month-day.is-open-target::after, #monthGantt .month-day-head.is-open-target::after { content: ""; position: absolute; z-index: 3; top: 0; right: 0; bottom: 0; left: 0; height: auto; border: 2px solid var(--blue); pointer-events: none; }
+#monthGantt .month-day.is-open-fallback::after, #monthGantt .month-day-head.is-open-fallback::after { border-color: var(--warn); }
+#monthGantt .month-day-head { position: relative; }
+.month-open-hint { position: fixed; z-index: 400; max-width: 360px; padding: 6px 10px; border-radius: var(--radius-sm); color: var(--on-fill); background: var(--ink); font-size: .75rem; line-height: 1.5; pointer-events: none; }
+.month-open-hint[hidden] { display: none; }
+.month-open-hint.is-fallback { background: var(--warn); }
+
+/* 期間のドラッグ変更 */
+.timeline-period.is-dragging-period { z-index: 5; opacity: .85; outline: 2px solid var(--blue); outline-offset: -2px; }
+.is-period-dragging, .is-period-dragging * { cursor: grabbing !important; user-select: none; }
+body.is-period-dragging { cursor: grabbing; }
+.period-drag-hint { background: var(--blue); }
+.plan-dialog-hint.is-error { color: var(--danger); }
+#monthPlanDialog .settings-check-row { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+#monthPlanDialog .month-plan-status { flex: 1 1 auto; margin: 0 auto 0 0; align-self: center; }
+
+/* プロジェクト・日次タブの文字サイズと高さの整理 */
+/* プロジェクト: カードのタイトル13px、補足11px、状態は塗りなしの色付き文字 */
+.project-meta, .project-month-preview, .project-issues-count, .project-issue-row, .project-issue-hours, .project-issue-name small, .project-empty-issues, .summary-card .summary-meta { font-size: .6875rem; }
+.project-card-title h3, .project-issue-name strong { font-size: .8125rem; }
+.project-card .project-status, .project-card .weekly-status { padding: 0; background: transparent; line-height: 20px; }
+.project-card .project-status.is-paused { color: var(--warn); }
+
+/* 設定のスイッチ: オフのときも、アプリの配色（灰色と青）にそろえる。標準の淡い紫がかった色は使わない。
+   Material の変数は、オフが接頭辞なし（--md-switch-track-color など）、オンが selected- 付き。 */
+md-switch {
+  --md-switch-track-color: var(--surface-3);
+  --md-switch-hover-track-color: var(--surface-3);
+  --md-switch-focus-track-color: var(--surface-3);
+  --md-switch-pressed-track-color: var(--surface-3);
+  --md-switch-track-outline-color: #80868b;
+  --md-switch-hover-track-outline-color: var(--faint);
+  --md-switch-focus-track-outline-color: var(--faint);
+  --md-switch-pressed-track-outline-color: var(--faint);
+  --md-switch-handle-color: #80868b;
+  --md-switch-hover-handle-color: var(--faint);
+  --md-switch-focus-handle-color: var(--faint);
+  --md-switch-pressed-handle-color: var(--faint);
+  --md-switch-hover-state-layer-color: var(--faint);
+  --md-switch-pressed-state-layer-color: var(--faint);
+  --md-switch-selected-track-color: var(--blue);
+  --md-switch-selected-hover-track-color: var(--blue);
+  --md-switch-selected-focus-track-color: var(--blue);
+  --md-switch-selected-pressed-track-color: var(--blue);
+  --md-switch-selected-handle-color: var(--on-fill);
+  --md-switch-selected-hover-handle-color: var(--on-fill);
+  --md-switch-selected-focus-handle-color: var(--on-fill);
+  --md-switch-selected-pressed-handle-color: var(--on-fill);
+  --md-switch-selected-hover-state-layer-color: var(--blue);
+  --md-switch-selected-pressed-state-layer-color: var(--blue);
+}
+
+/* 週タブ: 完了した予定のグループ（実施中の下にまとめる）。 */
+
+
+/* 週タブ: どこからどこまでが同じ週かを、色で示す。表示中の週は白のまま、前後の週の日付の列は薄い灰色に塗る。
+   日付の列は、1列目が名前、2〜15列目が前の2週、16〜22列目が表示中の週、23〜36列目が次の2週（月曜始まりの7日ずつ、計5週）。
+   すでにある背景色（土日・今日など）を消さないよう、色は重ねて塗る。 */
+.week-span > :not(.timeline-period-layer):not(.timeline-periods):not(.empty-state):not(.span-row) > :nth-child(n+2):nth-child(-n+15):not(.timeline-period-layer),
+.week-span > :not(.timeline-period-layer):not(.timeline-periods):not(.empty-state):not(.span-row) > :nth-child(n+23):not(.timeline-period-layer) {
+  background-image: linear-gradient(rgba(60, 64, 67, .045), rgba(60, 64, 67, .045));
+}
+/* 週の境目（日曜と月曜の間）の線を、ほかの日の線より濃くする。 */
+/* 予定の行には日付ごとのセルがないので、列の線・土日の色・前後の週の色は行の背景で描く（5週×7日の35列、名前の列の右から）。 */
+.week-span > .span-row {
+  --col: var(--week-day-col, 160px);
+  background-repeat: no-repeat;
+  background-position: var(--week-name-col) 0, var(--week-name-col) 0, 0 0, var(--week-name-col) 0, calc(var(--week-name-col) + 21 * var(--col)) 0, var(--week-name-col) 0;
+  background-size: calc(35 * var(--col)) 100%, calc(35 * var(--col)) 100%, 100% 100%, calc(14 * var(--col)) 100%, calc(14 * var(--col)) 100%, calc(35 * var(--col)) 100%;
+  background-image:
+    repeating-linear-gradient(to right, transparent 0 calc(7 * var(--col) - 1px), var(--line-strong) calc(7 * var(--col) - 1px) calc(7 * var(--col))),
+    repeating-linear-gradient(to right, transparent 0 calc(var(--col) - 1px), #edf0f4 calc(var(--col) - 1px) var(--col)),
+    linear-gradient(transparent, transparent),
+    var(--hover-tint, linear-gradient(rgba(60, 64, 67, .045), rgba(60, 64, 67, .045))),
+    var(--hover-tint, linear-gradient(rgba(60, 64, 67, .045), rgba(60, 64, 67, .045))),
+    var(--hover-tint, repeating-linear-gradient(to right, transparent 0 calc(5 * var(--col)), var(--surface-2) calc(5 * var(--col)) calc(7 * var(--col))));
+}
+/* 帯の中の日ごとの区切り（日付のセルの代わり）。 */
+.timeline-period.is-week::before { content: ''; position: absolute; z-index: 2; top: 30px; left: -5px; right: 0; height: 20px; background: repeating-linear-gradient(to right, transparent 0 calc(var(--week-day-col, 160px) - 1px), rgba(11, 87, 208, .2) calc(var(--week-day-col, 160px) - 1px) var(--week-day-col, 160px)); pointer-events: none; }
+.timeline-period.is-week.continues-before::before { left: 0; }
+.span-subtask-lane { min-height: 44px; }
+/* 週の予定の帯は、行の高さに合わせて伸ばす（上下に8pxの余白）。 */
+.week-span .timeline-period-layer { grid-template-rows: minmax(0, 1fr); padding-bottom: 8px; }
+.week-span .timeline-period-layer > .timeline-period { height: auto; }
+/* 帯の課題名は1行（長いときは省略）。実績のチップは、その少し下に出す。 */
+/* 週の見出しの帯は、表示中の週を太字にする。 */
+.timeline-periods > .timeline-periods-segment.is-selected-period .timeline-periods-title { color: var(--ink); font-weight: 700; }
+
+/* スクロールバー: Material 風（細く、つまみは角が丸く、背景は透明）。ブラウザ標準の太い灰色のバーは使わない。
+   Chrome系は ::-webkit-scrollbar、それ以外（Firefoxなど）は標準の scrollbar-width / scrollbar-color を使う。
+   Chrome は、標準の指定があると ::-webkit-scrollbar を無視するので、標準の指定は未対応のブラウザだけに当てる。 */
+:root { --scrollbar-thumb: rgba(95, 99, 104, .38); --scrollbar-thumb-hover: rgba(95, 99, 104, .62); }
+*::-webkit-scrollbar { width: 12px; height: 12px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { min-height: 36px; border: 3px solid transparent; border-radius: var(--radius-pill); background: var(--scrollbar-thumb); background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: padding-box; }
+*::-webkit-scrollbar-corner { background: transparent; }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+}
+
+/* ホバーの説明: Material の plain tooltip（濃い灰色の面、白い12px、角丸4px）。 */
+.material-tooltip { position: fixed; z-index: 1000; max-width: 280px; padding: 4px 8px; border-radius: var(--radius-xs, 4px); color: #fff; background: #3c4043; font-size: .75rem; line-height: 1.5; pointer-events: none; opacity: 0; transition: opacity .12s linear; white-space: pre-line; }
+.material-tooltip.is-visible { opacity: 1; }
+
+/* 「予定はありません」は、横にスクロールしても見えている幅の中央に置く（広い表の中央に置かれて、画面の外にずれないように）。 */
+.week-calendar-scroll, .month-gantt-scroll { container-type: inline-size; }
+.week-calendar-scroll .empty-state, .month-gantt-scroll .empty-state { position: sticky; left: 0; box-sizing: border-box; width: 100cqw; }
+.week-calendar-scroll .empty-state small, .month-gantt-scroll .empty-state small { padding: 0; background: transparent; }
+
+/* 月の画面から開いた週の行を、短い間だけ強調する。 */
+.span-row.is-flash::before { content: ""; position: absolute; z-index: 6; inset: 0; background: var(--blue); pointer-events: none; animation: row-flash 1.8s ease-out both; }
+@keyframes row-flash { 0%, 25% { opacity: .18; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .span-row.is-flash::before { animation-duration: .01s; } }
+
+/* Backlog設定: プロジェクトの割り当て */
+.backlog-project-map-list { display: grid; gap: 8px; margin-top: 12px; max-width: 560px; }
+.backlog-project-map-row { display: grid; grid-template-columns: minmax(0, 1fr) 240px; align-items: center; gap: 12px; }
+.backlog-project-map-name { display: grid; min-width: 0; }
+.backlog-project-map-name strong { overflow: hidden; font-size: .875rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.backlog-project-map-name small { color: var(--faint); font-size: .75rem; }
+#backlogProjectMapStatus { color: var(--muted); font-size: .8125rem; }
+#backlogProjectMapStatus.is-error { color: var(--danger); }
+
+/* 使い方: 手順を番号つきで並べる（飾りは付けない）。 */
+.guide-steps { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; counter-reset: guide; }
+.guide-steps > li { position: relative; padding: 16px 0 16px 36px; border-top: 1px solid var(--line); counter-increment: guide; }
+.guide-steps > li::before { content: counter(guide); position: absolute; left: 0; top: 16px; display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; color: var(--blue); background: var(--blue-tint); font-size: .75rem; font-weight: 500; }
+.guide-steps h3 { margin: 0 0 6px; }
+.guide-steps p { margin: 0 0 8px; color: var(--muted); font-size: .8125rem; line-height: 1.7; }
+.guide-steps md-text-button { margin: 0 8px 0 -12px; }
+.guide-status { color: var(--ink) !important; font-weight: 500; }
+.guide-status.is-warn { color: var(--danger) !important; }
+.storage-current { background: var(--surface-2); }
+
+/* 週予定の名前の欄: つかむ部分は左端の中央に細く置き、進行状況は実績の行の右端、サブタスクの開閉は下の行の左端に置く。 */
+.span-name.is-compact { grid-template-columns: minmax(0, 1fr); padding-left: 16px; }
+/* つかむ場所は、行の左端を縦いっぱいに使う（幅は12pxだけ）。 */
+.span-name.is-compact .span-priority-handle { position: absolute; z-index: 2; top: 0; bottom: 0; left: 0; width: 12px; height: auto; overflow: hidden; }
+.span-name.is-compact .span-priority-handle:hover { background: var(--surface-3); }
+.span-name-hours-row { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
+.span-name.is-compact .span-name-actions { gap: 2px; }
+.span-name.is-compact .span-subtasks-toggle { align-self: center; margin: 0 0 0 -6px; }
+.span-name.is-compact .span-subtasks-spacer { display: inline-block; width: 22px; height: 28px; }
+.span-name.is-compact .span-name-subtasks { justify-content: flex-end; }
+.span-name.is-compact .span-priority-handle { --md-icon-button-icon-color: var(--line-strong); }
+.span-row:hover .span-name.is-compact .span-priority-handle, .span-name.is-compact .span-priority-handle:focus-visible { --md-icon-button-icon-color: var(--muted); }
+
+/* 日タブ（PC幅）: つかむ場所は行の左端を縦いっぱい（幅12px）にして、週タブとそろえる。 */
+@media (min-width: 621px) {
+  .task-table .col-handle { width: 20px; }
+  .work-card td.task-col-handle { position: relative; padding: 0; }
+  .work-card td.task-col-handle md-icon-button.drag-handle { position: absolute; top: 0; bottom: 0; left: 0; width: 12px; height: auto; overflow: hidden; --md-icon-button-icon-size: 16px; --md-icon-button-state-layer-width: 12px; --md-icon-button-state-layer-height: 100%; --md-icon-button-state-layer-shape: 0; }
+  .work-card td.task-col-handle md-icon-button.drag-handle:hover { background: var(--surface-3); }
+}
+
+/* 確認ダイアログ: 小さめの幅で、本文の改行はそのまま出す。取り返しのつかない操作の実行ボタンは赤。 */
+md-dialog.confirm-dialog { width: min(440px, calc(100% - 48px)); max-width: min(440px, calc(100% - 48px)); z-index: 800; }
+.confirm-dialog-message { margin: 0; color: var(--muted); font-size: .875rem; line-height: 1.7; white-space: pre-line; overflow-wrap: anywhere; }
+md-filled-button.is-danger { --md-filled-button-container-color: var(--danger); --md-filled-button-label-text-color: var(--on-fill); --md-filled-button-hover-label-text-color: var(--on-fill); --md-filled-button-focus-label-text-color: var(--on-fill); --md-filled-button-pressed-label-text-color: var(--on-fill); }
+
+/* 一覧の予定行の備考。名前の横の小さなアイコンで示し、押すと入力パネルを開く（行の高さは変えない）。 */
+.span-name-copy.has-note .span-name-title { padding-right: 22px; }
+.plan-note-icon { position: absolute; top: 8px; right: 8px; z-index: 1; display: grid; width: 20px; height: 20px; padding: 0; place-items: center; border: 0; border-radius: 50%; color: var(--muted); background: transparent; cursor: pointer; }
+.plan-note-icon .material-symbols-outlined { font-size: 16px; }
+.plan-note-icon:hover, .plan-note-icon:focus-visible { color: var(--blue); background: var(--control-hover); }
+.plan-note-icon.is-empty { color: var(--faint); opacity: .55; }
+.span-row:hover .plan-note-icon.is-empty, .month-plan:hover .plan-note-icon.is-empty, .plan-note-icon.is-empty:focus-visible { opacity: 1; }
+.month-name-heading > .plan-note-icon { position: static; flex: 0 0 auto; margin-top: 0; }
+.plan-note-pop { position: fixed; z-index: 700; box-sizing: border-box; display: grid; width: 300px; gap: 6px; padding: 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow); }
+md-outlined-text-field.plan-note-input { display: block; width: 100%; min-width: 0; --md-outlined-field-top-space: 8px; --md-outlined-field-bottom-space: 8px; }
+.plan-note-pop-links { display: grid; gap: 2px; }
+.plan-note-link { display: flex; min-width: 0; align-items: center; gap: 4px; overflow: hidden; color: var(--blue); font-size: .75rem; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.plan-note-link .material-symbols-outlined { flex: 0 0 auto; font-size: 14px; }
+.plan-note-link:hover, .plan-note-link:focus-visible { text-decoration: underline; }
+
+/* キーボードで選んだ行（週は名前の欄）。 */
+.span-row .span-name.is-compact:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.span-name[data-plan-id], .month-name[data-month-plan-id] { scroll-margin-top: 140px; scroll-margin-bottom: 24px; }
+.timeline-period:focus-visible, .span-actual:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.shortcut-fixed-title { margin: 16px 0 0; color: var(--muted); font-size: .8125rem; font-weight: 500; }
+.shortcut-list.is-fixed { margin-top: 8px; }
+.shortcut-fixed-key { min-width: 72px; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--muted); background: var(--surface-2); font: inherit; font-size: .8125rem; font-weight: 500; text-align: center; white-space: nowrap; }

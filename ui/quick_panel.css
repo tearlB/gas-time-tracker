@@ -1,0 +1,67 @@
+
+/* 今日の実績パネル（どの画面からでも開く）。画面を切り替えない1つの一覧。
+   1行に、完了・課題名・時間（−／＋）・計測だけを出し、行の名前を押すと、その場で開いて、プロジェクトや予定などを出す。 */
+.quick-actual { position: fixed; z-index: 150; top: calc(var(--bar-height) + 8px); right: 16px; display: flex; width: 400px; max-height: calc(100vh - var(--bar-height) - 24px); flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); }
+.quick-actual[hidden] { display: none; }
+.quick-head { display: flex; align-items: center; gap: 8px; padding: 12px 8px 12px 16px; border-bottom: 1px solid var(--line); }
+.quick-head > div { display: grid; min-width: 0; flex: 1; }
+.quick-head strong { font-size: .9375rem; font-weight: 500; }
+.quick-head small { color: var(--faint); font-size: .75rem; }
+.quick-total { margin: 0; font-variant-numeric: tabular-nums; }
+.quick-total b { font-size: 1.25rem; font-weight: 500; }
+.quick-total span { margin-left: 2px; color: var(--faint); font-size: .75rem; }
+.quick-empty-box { display: grid; justify-items: start; gap: 12px; padding: 0 16px; }
+.quick-empty-box:not(:empty) { padding-block: 16px; }
+.quick-empty { margin: 0; color: var(--muted); font-size: .8125rem; }
+.quick-actions { display: flex; justify-content: flex-end; gap: 4px; padding: 4px 8px; border-top: 1px solid var(--line); }
+.quick-actions[hidden] { display: none; }
+.quick-foot { padding: 8px 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: .75rem; }
+
+/* 一覧 */
+.quick-list { display: block; margin: 0; padding: 0; overflow-x: hidden; overflow-y: auto; list-style: none; scrollbar-gutter: stable; }
+.quick-list:empty { display: none; }
+.qa-row { border-bottom: 1px solid var(--line); }
+.qa-row:last-child { border-bottom: 0; }
+.qa-row.is-open { background: var(--surface-2); }
+.qa-main { display: flex; align-items: center; gap: 2px; min-height: 52px; padding: 0 4px 0 8px; }
+.qa-row:not(.is-open) .qa-main:hover { background: var(--surface-2); }
+.qa-main md-checkbox { flex: 0 0 auto; margin: 0; }
+.qa-main md-icon-button { margin: 0; }
+.qa-open { display: grid; min-width: 0; flex: 1; gap: 1px; padding: 8px 4px; border: 0; color: var(--ink); background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.qa-open:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; border-radius: var(--radius-xs); }
+.qa-name { overflow: hidden; font-size: .8125rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.qa-key { font-family: var(--mono); }
+.qa-sub { overflow: hidden; color: var(--faint); font-size: .6875rem; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.qa-sub .is-over { color: var(--danger); }
+.qa-row.is-done .qa-name { color: var(--faint); text-decoration: line-through; }
+.qa-stepper { display: flex; flex: 0 0 auto; align-items: center; }
+.qa-stepper .quick-step, .qa-main .quick-timer { --md-icon-button-icon-size: 18px; --md-icon-button-state-layer-height: 28px; --md-icon-button-state-layer-width: 28px; color: var(--muted); }
+.quick-actual md-outlined-text-field { --md-outlined-field-top-space: 4px; --md-outlined-field-bottom-space: 4px; }
+.quick-actual md-outlined-text-field.quick-hours { width: 64px; text-align: right; }
+
+/* 開いた行 */
+.qa-more { display: grid; gap: 8px; padding: 0 16px 12px 52px; }
+.quick-actual .qa-more md-outlined-text-field, .quick-actual .qa-more md-outlined-select { width: 100%; min-width: 0; }
+.qa-fullname { margin: 0; font-size: .8125rem; line-height: 1.5; overflow-wrap: anywhere; user-select: text; }
+.qa-project-text { margin: 0; font-size: .8125rem; }
+.qa-project-text small { display: block; color: var(--faint); font-size: .6875rem; }
+.qa-facts-line { margin: 0; color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.qa-facts-line b { color: var(--ink); font-weight: 500; }
+.qa-facts-line b.is-over { color: var(--danger); }
+.qa-actions { display: flex; align-items: center; gap: 4px; }
+.qa-actions .quick-remove { margin-left: auto; }
+
+@media (max-width: 620px) {
+  .quick-actual { top: auto; right: 0; bottom: 0; left: 0; width: auto; max-height: 80vh; border-radius: var(--radius) var(--radius) 0 0; }
+}
+.qa-main .qa-toggle { --md-icon-button-icon-size: 20px; --md-icon-button-state-layer-height: 28px; --md-icon-button-state-layer-width: 28px; color: var(--muted); }
+.qa-toggle .material-symbols-outlined { transition: transform .2s cubic-bezier(.2, 0, 0, 1); }
+.qa-row.is-open .qa-toggle .material-symbols-outlined { transform: rotate(180deg); }
+.qa-open:hover .qa-name { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+
+/* 右側のサイドパネル。開くと本体を左へ寄せるので、後ろの画面が隠れない。狭い画面（1100px未満）では、下から開くシートにする。 */
+@media (min-width: 1100px) {
+  body.quick-docked .main { margin-right: 416px; }
+  .quick-actual.is-docked { top: var(--bar-height); right: 8px; bottom: 8px; width: 400px; max-height: none; border: 0; border-radius: var(--radius); box-shadow: none; }
+  .quick-actual.is-docked .quick-list { flex: 1 1 auto; min-height: 0; }
+}

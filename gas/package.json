@@ -1,0 +1,8 @@
+{
+  "name": "matomete-kousu-kanri-san",
+  "private": true,
+  "devDependencies": {
+    "@google/clasp": "^3.4.1",
+    "@types/google-apps-script": "^1.0.97"
+  }
+}

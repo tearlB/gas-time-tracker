@@ -1,0 +1,17 @@
+{
+  "name": "まとめて工数管理さん",
+  "install": "npm install && npm --prefix gas install",
+  "terminals": [
+    {
+      "name": "preview",
+      "command": "npm run preview",
+      "description": "GAS API をモックしたプレビューサーバー。http://127.0.0.1:4173 でカレンダー画面を確認できる。"
+    }
+  ],
+  "ports": [
+    {
+      "name": "preview",
+      "port": 4173
+    }
+  ]
+}

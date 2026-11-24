@@ -1,0 +1,10 @@
+---
+description: Playwright禁止。確認は Node のテストで行う
+alwaysApply: true
+---
+
+# 確認方法
+
+- Playwright、playwright-cli、ブラウザ自動操作は使わない
+- 動作確認は `npm test` と、必要なら Node から呼ぶ純関数・モック API で行う
+- `.playwright-cli/` や `output/playwright/` は作らない

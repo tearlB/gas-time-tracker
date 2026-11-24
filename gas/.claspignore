@@ -1,0 +1,14 @@
+**/*
+!appsscript.json
+!code.gs
+!budget.gs
+!completion_settings.gs
+!planning.gs
+!projects.gs
+!storage_schema.gs
+!legacy.gs
+!google_tasks.gs
+!backlog.gs
+!weekly_report.gs
+!index.html
+!sw.html
