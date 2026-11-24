@@ -48,8 +48,20 @@ function previousWeekKey(key) {
   return `${year}-W${pad2(1 + Math.round((prev - firstThursday) / 604800000))}`;
 }
 
+// テストでは「今日」を固定できるようにする。プレビューでは実際の今日を使う。
+let demoTodayOverride = null;
+function setDemoToday(ymd) {
+  demoTodayOverride = ymd || null;
+}
+function demoNow() {
+  return demoTodayOverride ? new Date(`${demoTodayOverride}T12:00:00`) : new Date();
+}
+function demoTodayYmd() {
+  return formatYmd(demoNow());
+}
+
 function currentWeekKey() {
-  const today = new Date();
+  const today = demoNow();
   const thursday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
   thursday.setUTCDate(thursday.getUTCDate() + 3 - (thursday.getUTCDay() + 6) % 7);
   const year = thursday.getUTCFullYear();
@@ -59,7 +71,7 @@ function currentWeekKey() {
 }
 
 function currentMonthKey() {
-  return formatYmd(new Date()).slice(0, 7);
+  return demoTodayYmd().slice(0, 7);
 }
 
 function mergeLifetimeDemoActuals(type, key, rows) {
@@ -178,97 +190,121 @@ function weekDates(key) {
   };
 }
 
+// 保存済みとして見せる週。今週・前週・前々週だけ。
 function savedWeekKind(key) {
   const current = currentWeekKey();
   if (key === current) return 'current';
   const previous = previousWeekKey(current);
-  if (key === previous || key === previousWeekKey(previous)) return 'past';
+  if (key === previous) return 'past';
+  if (key === previousWeekKey(previous)) return 'past2';
   return '';
 }
 
-function demoWeekWorkspace(key) {
+// 週ごとに中身の違う予定を置く。同じ名前の予定を週ごとに作り直すと、
+// 実績が週をまたいで合算されて予定を超え、どれも赤（遅延）に見えてしまうため。
+// pace は予定工数に対する実績の進み具合（1 で予定どおり）。
+function demoWeekPlanSpecs(key, kind) {
   const days = weekDates(key);
-  const kind = savedWeekKind(key);
-  // 予定は期間（開始日〜終了日）で押さえる。週をまたぐ予定・前倒し・期限切れも見えるようにする。
-  const plans = [
-    { aggregationKey: 'ダッシュボード刷新', plannedHours: 8, note: '今週の最優先', startDate: days.mon, endDate: days.thu, priority: 0, initialPlannedHours: 8, planKind: 'initial' },
-    { aggregationKey: 'API連携', plannedHours: 6, note: '認証まわりを先に', startDate: days.mon, endDate: addDaysYmd(days.mon, 9), priority: 1, initialPlannedHours: 6, planKind: 'initial' },
-    { aggregationKey: '権限まわり改修', plannedHours: 4, note: '', startDate: days.wed, endDate: days.fri, priority: 2, initialPlannedHours: 4, planKind: 'initial' },
-    { aggregationKey: 'コードレビュー', plannedHours: 3, note: '', startDate: days.mon, endDate: days.fri, priority: 3, initialPlannedHours: 3, planKind: 'initial' },
-    { aggregationKey: '設計レビュー', plannedHours: 2, note: `start:${days.mon}\ncarry:${previousWeekKey(key)}`, priority: 5, initialPlannedHours: 2, planKind: 'initial' },
-    { aggregationKey: 'ドキュメント整備', plannedHours: 3, note: '', startDate: days.thu, endDate: days.fri, priority: 6, initialPlannedHours: 3, planKind: 'initial' },
-    { aggregationKey: 'リリース判定', plannedHours: 2, note: '', startDate: days.fri, endDate: days.fri, priority: 7, initialPlannedHours: 2, planKind: 'initial' },
-    { aggregationKey: 'オンボーディング資料', plannedHours: 3, note: '先週から残っている', startDate: addDaysYmd(days.mon, -5), endDate: addDaysYmd(days.mon, -3), priority: 8, initialPlannedHours: 3, planKind: 'initial' },
-    { aggregationKey: '障害対応', plannedHours: 2.5, note: '週途中で追加', startDate: days.wed, endDate: days.wed, priority: 9, initialPlannedHours: 2.5, planKind: 'added' },
-    { aggregationKey: '技術調査メモ', plannedHours: 4, note: '期間を決めずに少しずつ', undated: true, priority: 10, initialPlannedHours: 4, planKind: 'added' }
-  ];
-  plans.forEach(plan => { plan.projectId = DEMO_PROJECT_PLAN_MAP[plan.aggregationKey] || ''; });
+  if (kind === 'current') {
+    return [
+      { aggregationKey: 'ダッシュボード刷新', plannedHours: 8, note: '今週の最優先', startDate: days.mon, endDate: days.thu, pace: 1 },
+      { aggregationKey: 'API連携', plannedHours: 6, note: '認証まわりを先に', startDate: days.mon, endDate: addDaysYmd(days.mon, 9), pace: 0.9 },
+      { aggregationKey: 'コードレビュー', plannedHours: 3, note: '', startDate: days.mon, endDate: days.fri, pace: 1 },
+      { aggregationKey: '設計レビュー', plannedHours: 2, note: `start:${days.mon}\ncarry:${previousWeekKey(key)}`, actualOn: [[days.mon, 1]] },
+      { aggregationKey: '障害対応', plannedHours: 2, note: '週途中で追加', startDate: days.wed, endDate: days.wed, pace: 1, planKind: 'added' },
+      { aggregationKey: '技術調査メモ', plannedHours: 4, note: '期間を決めずに少しずつ', undated: true, actualOn: [[days.tue, 1]], planKind: 'added' }
+    ];
+  }
+  if (kind === 'past') {
+    return [
+      { aggregationKey: '権限まわり改修', plannedHours: 6, note: '', startDate: days.mon, endDate: days.thu, pace: 1 },
+      { aggregationKey: 'ドキュメント整備', plannedHours: 3, note: '', startDate: days.thu, endDate: days.fri, pace: 1 },
+      { aggregationKey: 'リリース判定', plannedHours: 2, note: '', startDate: days.fri, endDate: days.fri, pace: 1 }
+    ];
+  }
+  if (kind === 'past2') {
+    return [
+      { aggregationKey: 'オンボーディング資料', plannedHours: 4, note: '採用向け', startDate: days.mon, endDate: days.wed, pace: 1 },
+      { aggregationKey: '運用手順の整理', plannedHours: 3, note: '', startDate: days.wed, endDate: days.fri, pace: 1 }
+    ];
+  }
+  return [];
+}
 
+function demoWorkdaysBetween(startYmd, endYmd) {
+  const result = [];
+  let day = startYmd;
+  while (day <= endYmd) {
+    const weekday = new Date(day + 'T12:00:00').getDay();
+    if (weekday !== 0 && weekday !== 6) result.push(day);
+    day = addDaysYmd(day, 1);
+  }
+  return result;
+}
+
+function floorQuarter(value) {
+  return Math.floor(value * 4) / 4;
+}
+
+function demoWeekWorkspace(key) {
+  const kind = savedWeekKind(key);
+  const today = demoTodayYmd();
+  const days = weekDates(key);
   const actualByDate = {};
   const put = (name, date, hours) => {
-    if (!hours) return;
+    if (!hours || date >= today) return;
     actualByDate[name] = actualByDate[name] || {};
     actualByDate[name][date] = hours;
   };
 
-  if (kind === 'current' || kind === 'past') {
-    put('ダッシュボード刷新', days.mon, 2.5);
-    put('ダッシュボード刷新', days.tue, 2);
-    put('API連携', days.mon, 1.5);
-    put('API連携', days.tue, 2);
-    put('API連携', days.wed, 1.25);
-    put('権限まわり改修', days.tue, 2);
-    put('権限まわり改修', days.wed, 1);
-    put('コードレビュー', days.mon, 1);
-    put('コードレビュー', days.tue, 1);
-    put('コードレビュー', days.wed, 0.5);
-    put('設計レビュー', days.mon, 2);
-    put('障害対応', days.wed, 1.5);
-    put('問い合わせ対応', days.wed, 1.25);
-    put('オンボーディング資料', addDaysYmd(days.mon, -4), 1);
-    put('技術調査メモ', days.tue, 1);
-  }
-  if (kind === 'past') {
-    put('ダッシュボード刷新', days.wed, 2);
-    put('ダッシュボード刷新', days.thu, 2.5);
-    put('API連携', days.thu, 2);
-    put('API連携', days.fri, 2.5);
-    put('権限まわり改修', days.thu, 1.5);
-    put('ドキュメント整備', days.thu, 2.5);
-    put('ドキュメント整備', days.fri, 1);
-    put('リリース判定', days.fri, 2);
-    put('オンボーディング資料', days.mon, 1.5);
-    put('障害対応', days.thu, 1);
-    put('問い合わせ対応', days.fri, 0.75);
-  }
+  const plans = demoWeekPlanSpecs(key, kind).map((spec, index) => {
+    const { pace, actualOn, ...plan } = spec;
+    plan.priority = index;
+    plan.initialPlannedHours = plan.plannedHours;
+    plan.planKind = plan.planKind || 'initial';
+    plan.projectId = DEMO_PROJECT_PLAN_MAP[plan.aggregationKey] || '';
+    if (actualOn) actualOn.forEach(([date, hours]) => put(plan.aggregationKey, date, hours));
+    if (pace && plan.startDate && plan.endDate) {
+      // 予定の期間に均等に実績を入れる。今日以降の日には入れない。予定工数は超えない。
+      const workdays = demoWorkdaysBetween(plan.startDate, plan.endDate);
+      const perDay = floorQuarter(plan.plannedHours * pace / workdays.length);
+      workdays.forEach((date, position) => {
+        const last = position === workdays.length - 1 && pace >= 1;
+        put(plan.aggregationKey, date, last ? plan.plannedHours - perDay * (workdays.length - 1) : perDay);
+      });
+      // 終了日を過ぎた予定は完了にする（期限切れにしない）。
+      plan.done = plan.endDate < today;
+    }
+    return plan;
+  });
+
+  // 予定にない、今日だけの作業。
+  if (kind) put('問い合わせ対応', days.wed, kind === 'current' ? 1 : 0.75);
 
   const actuals = {};
   Object.keys(actualByDate).forEach(name => {
     actuals[name] = Object.values(actualByDate[name]).reduce((sum, hours) => sum + hours, 0);
   });
 
-  const subtasks = [
-    { id: 'mock-1', periodType: 'week', periodKey: key, parentKey: 'ダッシュボード刷新', title: '情報設計を確定する', plannedHours: 2.5, dueDate: days.tue, status: 'done', note: '', sortOrder: 0 },
-    { id: 'mock-2', periodType: 'week', periodKey: key, parentKey: 'ダッシュボード刷新', title: 'レスポンシブ表示を調整', plannedHours: 4, dueDate: days.thu, status: kind === 'past' ? 'done' : 'doing', note: 'スマホ優先', sortOrder: 1 },
-    { id: 'mock-3', periodType: 'week', periodKey: key, parentKey: 'ダッシュボード刷新', title: 'グラフの空状態を直す', plannedHours: 1.5, dueDate: days.fri, status: kind === 'past' ? 'done' : 'todo', note: '', sortOrder: 2 },
-    { id: 'mock-4', periodType: 'week', periodKey: key, parentKey: 'API連携', title: '認証トークン更新を実装', plannedHours: 3, dueDate: days.wed, status: kind === 'past' ? 'done' : 'doing', note: '', sortOrder: 0 },
-    { id: 'mock-5', periodType: 'week', periodKey: key, parentKey: 'API連携', title: 'エラーハンドリングを揃える', plannedHours: 2.5, dueDate: days.fri, status: kind === 'past' ? 'done' : 'todo', note: '', sortOrder: 1 },
-    { id: 'mock-6', periodType: 'week', periodKey: key, parentKey: '権限まわり改修', title: 'ロール定義を洗い出す', plannedHours: 1.5, dueDate: days.tue, status: 'done', note: '', sortOrder: 0 },
-    { id: 'mock-7', periodType: 'week', periodKey: key, parentKey: '権限まわり改修', title: '管理画面の表示制御', plannedHours: 2.5, dueDate: days.thu, status: kind === 'past' ? 'done' : 'doing', note: '', sortOrder: 1 },
-    { id: 'mock-8', periodType: 'week', periodKey: key, parentKey: 'ドキュメント整備', title: '運用手順を更新', plannedHours: 2, dueDate: days.fri, status: kind === 'past' ? 'done' : 'todo', note: '', sortOrder: 0 }
-  ];
+  const subtaskState = dueDate => dueDate < today ? 'done' : dueDate === today ? 'doing' : 'todo';
+  const subtasks = kind !== 'current' ? [] : [
+    { id: 'mock-1', parentKey: 'ダッシュボード刷新', title: '情報設計を確定する', plannedHours: 2, dueDate: days.mon, sortOrder: 0 },
+    { id: 'mock-2', parentKey: 'ダッシュボード刷新', title: 'レスポンシブ表示を調整', plannedHours: 4, dueDate: days.wed, note: 'スマホ優先', sortOrder: 1 },
+    { id: 'mock-3', parentKey: 'ダッシュボード刷新', title: 'グラフの空状態を直す', plannedHours: 2, dueDate: days.thu, sortOrder: 2 },
+    { id: 'mock-4', parentKey: 'API連携', title: '認証トークン更新を実装', plannedHours: 3, dueDate: days.wed, sortOrder: 0 },
+    { id: 'mock-5', parentKey: 'API連携', title: 'エラーハンドリングを揃える', plannedHours: 3, dueDate: addDaysYmd(days.mon, 9), sortOrder: 1 },
+    { id: 'mock-6', parentKey: 'コードレビュー', title: 'レビュー指摘の確認', plannedHours: 3, dueDate: days.fri, sortOrder: 0 }
+  ].map(task => Object.assign({ periodType: 'week', periodKey: key, note: '', status: subtaskState(task.dueDate) }, task));
 
   return {
     plans,
     actuals,
     actualByDate,
     subtasks,
-    monthlyRows: [
-      { aggregationKey: 'ダッシュボード刷新', monthlyPlannedHours: 48, suggestedHours: 12, note: '今月の重点' },
-      { aggregationKey: 'API連携', monthlyPlannedHours: 32, suggestedHours: 8, note: '' },
-      { aggregationKey: '権限まわり改修', monthlyPlannedHours: 16, suggestedHours: 4, note: '' },
-      { aggregationKey: 'ドキュメント整備', monthlyPlannedHours: 12, suggestedHours: 3, note: '' },
-      { aggregationKey: 'オンボーディング資料', monthlyPlannedHours: 10, suggestedHours: 3, note: '採用向け' }
+    monthlyRows: kind !== 'current' ? [] : [
+      { aggregationKey: 'ダッシュボード刷新', monthlyPlannedHours: 40, suggestedHours: 10, note: '今月の重点' },
+      { aggregationKey: 'API連携', monthlyPlannedHours: 30, suggestedHours: 8, note: '' },
+      { aggregationKey: 'コードレビュー', monthlyPlannedHours: 12, suggestedHours: 3, note: '' }
     ]
   };
 }
@@ -348,7 +384,10 @@ const DEMO_PROJECT_PLAN_MAP = {
   '権限まわり改修': 'project-admin',
   'コードレビュー': 'project-admin',
   'ドキュメント整備': 'project-ops',
-  '障害対応': 'project-ops'
+  '障害対応': 'project-ops',
+  'リリース判定': 'project-portal',
+  'オンボーディング資料': 'project-ops',
+  '運用手順の整理': 'project-ops'
 };
 
 function projectStatusLabel(status) {
@@ -591,8 +630,7 @@ function planningResult(type, key, payload) {
     const plannedHours = plan ? Number(plan.plannedHours) || 0 : 0;
     const actualHours = actuals[name] || 0;
     const planKind = plan ? (plan.planKind || 'initial') : 'unplanned';
-    const weekKind = savedWeekKind(key);
-    const pastDone = weekKind === 'past' && ['コードレビュー', 'リリース判定', '設計レビュー'].indexOf(name) >= 0;
+    const planDone = !!(plan && plan.done);
     const notedDone = !!(plan && /(?:^|\n)done:(?:1|true)(?:\n|$)/i.test(plan.note || ''));
     const completionOverride = plan && plan.completionOverride != null ? Boolean(plan.completionOverride) : null;
     return {
@@ -624,8 +662,8 @@ function planningResult(type, key, payload) {
       remainingHours: plan ? Math.max(0, plannedHours - actualHours) : 0,
       initialPlannedHours: plan && plan.initialPlannedHours != null ? plan.initialPlannedHours : plannedHours,
       planKind,
-      complete: completionOverride === false ? false : pastDone || notedDone || !!(plan && plan.done),
-      dailyComplete: pastDone
+      complete: completionOverride === false ? false : planDone || notedDone,
+      dailyComplete: planDone
     };
   }).sort((left, right) => left.priority - right.priority || left.aggregationKey.localeCompare(right.aggregationKey, 'ja'));
   mergeLifetimeDemoActuals(type, key, rows);
@@ -767,15 +805,8 @@ function monthGanttResult(monthKey, saved) {
 }
 
 function demoWeekKeyForDate(dateValue) {
-  const current = currentWeekKey();
-  const previous = previousWeekKey(current);
-  const contains = key => {
-    const range = rangeFor('week', key);
-    return dateValue >= range.startYmd && dateValue < range.endExclusiveYmd;
-  };
-  if (contains(current)) return current;
-  if (contains(previous)) return previous;
-  return current;
+  const key = weekKeyForYmd(dateValue);
+  return savedWeekKind(key) ? key : currentWeekKey();
 }
 
 function demoParentPlan(weekKey, title) {
@@ -825,91 +856,55 @@ function presentDailyTasks(dateValue, tasks) {
   };
 }
 
+// 日次の行に付ける作業名（予定名のあとに続ける）。週のサブタスク名の頭と合わせる。
+const DEMO_CHILD_LABELS = {
+  'ダッシュボード刷新': ['情報設計', 'レスポンシブ表示', 'レスポンシブ表示', 'グラフの空状態'],
+  'API連携': ['認証トークン更新', '認証トークン更新', 'エラーハンドリング', 'エラーハンドリング', '結合'],
+  'コードレビュー': ['レビュー指摘'],
+  '設計レビュー': ['仕上げ'],
+  '障害対応': ['切り分け'],
+  '技術調査メモ': ['下調べ'],
+  '権限まわり改修': ['調査', 'ロール定義', '表示制御', '確認'],
+  'ドキュメント整備': ['運用手順', 'レビュー'],
+  'リリース判定': ['チェックリスト'],
+  'オンボーディング資料': ['構成', '執筆', '見直し'],
+  '運用手順の整理': ['洗い出し', '更新', '共有']
+};
+
+// 日次の行は、その週の実績（demoWeekWorkspace）から作る。週と日で数字が食い違わないようにする。
 function demoDailyTasks(dateValue) {
   const saved = savedDailyTasks(dateValue);
   if (saved) return presentDailyTasks(dateValue, saved);
 
-  const days35 = weekDates(currentWeekKey());
-  const days34 = weekDates(previousWeekKey(currentWeekKey()));
-  const catalog = {};
-  catalog[days35.mon] = [
-    dailyTask('ダッシュボード刷新 調査', 2.5, 5, 12, '↑', { isCarryOver: true }),
-    dailyTask('API連携 実装', 1.5, 8, 8, '↓'),
-    dailyTask('コードレビュー 指摘確認', 1, 2, 3, ''),
-    dailyTask('設計レビュー 仕上げ', 2, 1.5, 2, '↑')
-  ];
-  catalog[days35.tue] = [
-    dailyTask('ダッシュボード刷新 情報設計', 2, 7.5, 12, '↑', { isCarryOver: true }),
-    dailyTask('API連携 認証', 2, 9.5, 10, ''),
-    dailyTask('権限まわり改修 ロール定義', 2, 0, 4, ''),
-    dailyTask('コードレビュー 実装差分', 1, 3, 3, '')
-  ];
-  catalog[days35.wed] = [
-    dailyTask('API連携 エラーハンドリング', 1.25, 11.5, 12, '↓'),
-    dailyTask('権限まわり改修 表示制御', 1, 2, 4, ''),
-    dailyTask('コードレビュー 再確認', 0.5, 4, 3, '↑'),
-    dailyTask('障害対応 切り分け', 1.5, 0, 2.5, ''),
-    dailyTask('問い合わせ対応 設定案内', 1.25, 0, 1.25, '完了', { type: 'interrupt' })
-  ];
-  catalog[days34.mon] = [
-    dailyTask('ダッシュボード刷新 調査', 2.5, 2, 12, '', { isCarryOver: true }),
-    dailyTask('API連携 実装', 1.5, 4, 8, ''),
-    dailyTask('設計レビュー 仕上げ', 2, 0, 2, '完了')
-  ];
-  catalog[days34.tue] = [
-    dailyTask('ダッシュボード刷新 ワイヤー', 2, 4.5, 12, ''),
-    dailyTask('API連携 認証', 2, 5.5, 8, ''),
-    dailyTask('権限まわり改修 調査', 2, 0, 4, '')
-  ];
-  catalog[days34.wed] = [
-    dailyTask('ダッシュボード刷新 実装', 2, 6.5, 12, ''),
-    dailyTask('API連携 結合', 1.25, 7.5, 8, ''),
-    dailyTask('オンボーディング資料 構成', 1.5, 0, 6, ''),
-    dailyTask('障害対応 切り分け', 1.5, 0, 2.5, ''),
-    dailyTask('問い合わせ対応 設定案内', 1.25, 0, 1.25, '完了', { type: 'interrupt' })
-  ];
-  catalog[days34.thu] = [
-    dailyTask('ダッシュボード刷新 調整', 2.5, 8.5, 12, ''),
-    dailyTask('API連携 試験', 2, 8.75, 8, '↑'),
-    dailyTask('ドキュメント整備 運用手順', 2.5, 0, 4, ''),
-    dailyTask('障害対応 再発防止', 1, 1.5, 3, '')
-  ];
-  catalog[days34.fri] = [
-    dailyTask('API連携 リリース準備', 2.5, 10.75, 8, '↑'),
-    dailyTask('ドキュメント整備 レビュー', 1, 2.5, 4, ''),
-    dailyTask('リリース判定 チェックリスト', 2, 0, 2, '完了'),
-    dailyTask('問い合わせ対応 フォロー', 0.75, 0, 0.75, '完了', { type: 'interrupt' })
-  ];
-  if (catalog[dateValue]) return presentDailyTasks(dateValue, catalog[dateValue]);
-  const date = new Date(dateValue + 'T12:00:00');
-  const weekday = date.getDay();
-  if (weekday === 0 || weekday === 6) {
-    return { mode: 'new', tasks: [], spreadsheetUrl: '#', importSource: [], needCalendar: false };
-  }
-  return presentDailyTasks(dateValue, [
-    dailyTask('ダッシュボード刷新 調査', 2, 4, 12, '', { isCarryOver: true }),
-    dailyTask('API連携 実装', 1.5, 6, 8, ''),
-    dailyTask('設計レビュー 仕上げ', 1, 1, 2, ''),
-    dailyTask('問い合わせ対応 設定案内', 1, 0, 1, '完了', { type: 'interrupt' })
-  ]);
+  const empty = { mode: 'new', tasks: [], spreadsheetUrl: '#', importSource: [], needCalendar: false };
+  const weekKey = weekKeyForYmd(dateValue);
+  if (!savedWeekKind(weekKey) || dateValue >= demoTodayYmd()) return empty;
+  const week = demoWeekWorkspace(weekKey);
+  const tasks = [];
+  week.plans.forEach(plan => {
+    const byDate = week.actualByDate[plan.aggregationKey] || {};
+    const hours = byDate[dateValue];
+    if (!hours) return;
+    const dates = Object.keys(byDate).sort();
+    const position = dates.indexOf(dateValue);
+    const labels = DEMO_CHILD_LABELS[plan.aggregationKey] || ['作業'];
+    const before = dates.slice(0, position).reduce((sum, date) => sum + byDate[date], 0);
+    const finished = plan.done && position === dates.length - 1;
+    tasks.push(dailyTask(`${plan.aggregationKey} ${labels[Math.min(position, labels.length - 1)]}`, hours, before, plan.plannedHours, finished ? '完了' : ''));
+  });
+  const inquiry = (week.actualByDate['問い合わせ対応'] || {})[dateValue];
+  if (inquiry) tasks.push(dailyTask('問い合わせ対応 設定案内', inquiry, 0, inquiry, '完了', { type: 'interrupt' }));
+  return tasks.length ? presentDailyTasks(dateValue, tasks) : empty;
 }
 
 function demoTaskNames() {
-  return [
-    'ダッシュボード刷新', 'API連携', '権限まわり改修', 'コードレビュー',
-    'ドキュメント整備', 'リリース判定', 'オンボーディング資料', '障害対応',
-    '問い合わせ対応', '設計レビュー', '運用手順の整理', '定例ミーティング',
-    'ダッシュボード刷新 調査', 'ダッシュボード刷新 情報設計', 'ダッシュボード刷新 ワイヤー',
-    'ダッシュボード刷新 実装', 'ダッシュボード刷新 調整', 'ダッシュボード刷新 作業',
-    'API連携 実装', 'API連携 認証', 'API連携 エラーハンドリング', 'API連携 結合',
-    'API連携 試験', 'API連携 リリース準備',
-    '権限まわり改修 ロール定義', '権限まわり改修 表示制御', '権限まわり改修 調査',
-    'コードレビュー 指摘確認', 'コードレビュー 実装差分', 'コードレビュー 再確認', 'コードレビュー 確認',
-    '設計レビュー 仕上げ', 'ドキュメント整備 運用手順', 'ドキュメント整備 レビュー',
-    'リリース判定 チェックリスト', 'オンボーディング資料 構成',
-    '障害対応 切り分け', '障害対応 再発防止',
-    '問い合わせ対応 設定案内', '問い合わせ対応 フォロー'
-  ];
+  const names = [];
+  Object.keys(DEMO_CHILD_LABELS).forEach(parent => {
+    names.push(parent);
+    DEMO_CHILD_LABELS[parent].forEach(label => names.push(`${parent} ${label}`));
+  });
+  names.push('問い合わせ対応', '問い合わせ対応 設定案内', '定例ミーティング');
+  return [...new Set(names)];
 }
 
 function demoDailyActualByName(type, key) {
@@ -967,7 +962,7 @@ function demoChildHoursBefore(named, parent, childTitle, beforeYmd) {
 }
 
 function demoImportSuggestions(dateStr) {
-  const date = String(dateStr || formatYmd(new Date())).trim() || formatYmd(new Date());
+  const date = String(dateStr || demoTodayYmd()).trim() || demoTodayYmd();
   const demo = demoWeekWorkspace(currentWeekKey());
   const named = demoDailyActualByName('week', currentWeekKey());
   const byParent = {};
@@ -983,22 +978,22 @@ function demoImportSuggestions(dateStr) {
       sortOrder: task.sortOrder || 0
     });
   });
-  return [
-    { title: 'ダッシュボード刷新', hours: 0, prevB: 5.25, prevC: 8, status: '', type: 'planning' },
-    { title: 'API連携', hours: 0, prevB: 4.75, prevC: 6, status: '', type: 'planning' },
-    { title: '権限まわり改修', hours: 0, prevB: 3, prevC: 4, status: '', type: 'planning' },
-    { title: 'コードレビュー', hours: 0, prevB: 2.5, prevC: 3, status: '', type: 'planning' },
-    { title: 'ドキュメント整備', hours: 0, prevB: 0, prevC: 3, status: '', type: 'planning' },
-    { title: 'リリース判定', hours: 0, prevB: 0, prevC: 2, status: '', type: 'planning' },
-    { title: 'オンボーディング資料', hours: 0, prevB: 0, prevC: 3, status: '', type: 'planning' },
-    { title: '障害対応', hours: 0, prevB: 1.5, prevC: 2.5, status: '', type: 'planning' },
-    { title: '設計レビュー', hours: 0, prevB: 2, prevC: 2, status: '', type: 'planning', carryWeek: previousWeekKey(currentWeekKey()), carry: true },
+  // 今週の予定から作る。「前日まで」は指定日より前の実績の合計。
+  const hoursBefore = name => Object.entries(demo.actualByDate[name] || {})
+    .reduce((sum, [day, hours]) => day < date ? sum + hours : sum, 0);
+  const nextWeek = nextWeekKey(currentWeekKey());
+  return demo.plans.filter(plan => !plan.done).map(plan => {
+    const item = { title: plan.aggregationKey, hours: 0, prevB: hoursBefore(plan.aggregationKey), prevC: plan.plannedHours, status: '', type: 'planning' };
+    if (/(?:^|\n)carry:/.test(plan.note || '')) Object.assign(item, { carryWeek: previousWeekKey(currentWeekKey()), carry: true });
+    return item;
+  }).concat([
     // 来週から始まる予定。実績画面では「これから」に出て、前倒しで今日に入れられる。
-    { title: '移行リハーサル', hours: 0, prevB: 0, prevC: 4, status: '', type: 'planning', periodKey: nextWeekKey(currentWeekKey()), startDate: weekDates(nextWeekKey(currentWeekKey())).mon, endDate: weekDates(nextWeekKey(currentWeekKey())).wed }
-  ].map(item => {
-    const periodKey = item.periodKey || item.carryWeek || currentWeekKey();
-    const sourcePlan = demoWorkspace('week', periodKey).plans.find(plan => plan.aggregationKey === item.title);
-    const fallbackId = `preview-week-${periodKey}-${sourcePlan && sourcePlan.priority != null ? sourcePlan.priority : item.title}`;
+    { title: '移行リハーサル', hours: 0, prevB: 0, prevC: 4, status: '', type: 'planning', periodKey: nextWeek, startDate: weekDates(nextWeek).mon, endDate: weekDates(nextWeek).wed }
+  ]).map(item => {
+    const lookupKey = item.periodKey || currentWeekKey();
+    const periodKey = item.carryWeek || lookupKey;
+    const sourcePlan = demoWorkspace('week', lookupKey).plans.find(plan => plan.aggregationKey === item.title);
+    const fallbackId = `preview-week-${lookupKey}-${sourcePlan && sourcePlan.priority != null ? sourcePlan.priority : item.title}`;
     return Object.assign({}, item, {
       periodType: 'week',
       periodKey,
@@ -1033,5 +1028,6 @@ module.exports = {
   demoDailyTasks,
   demoTaskNames,
   demoImportSuggestions,
-  saveWorkCapacitySetting
+  saveWorkCapacitySetting,
+  setDemoToday
 };

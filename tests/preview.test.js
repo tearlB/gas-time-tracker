@@ -15,9 +15,12 @@ const {
   projectWorkspace,
   saveProject,
   saveProjectMonthly,
-  saveWorkCapacitySetting
+  saveWorkCapacitySetting,
+  setDemoToday
 } = require('../scripts/preview-data');
 
+// サンプルの実績は「今日」より前の日にだけ入るので、テストでは今週の木曜を今日とする。
+setDemoToday(addDaysYmd(rangeFor('week', currentWeekKey()).startYmd, 3));
 const currentWeek = currentWeekKey();
 const previousWeek = previousWeekKey(currentWeek);
 const currentMonday = rangeFor('week', currentWeek).startYmd;
@@ -35,21 +38,28 @@ function withPreviewWindow(callback) {
   }
 }
 
-test('プレビューの今週実績は前週分も含む', () => {
-  const week = planningResult('week', currentWeek);
-  const dash = week.rows.find(row => row.aggregationKey === 'ダッシュボード刷新');
-  assert.ok(dash.actualByDate[previousMonday]);
-  assert.ok(dash.actualByDate[currentMonday]);
-  assert.ok(dash.actualHours > 4.5);
+test('プレビューの予定は週ごとに別で、実績が予定を超えず、過去の予定は完了している', () => {
+  const twoWeeksAgo = previousWeekKey(previousWeek);
+  const weeks = [currentWeek, previousWeek, twoWeeksAgo].map(key => planningResult('week', key));
+  const names = weeks.map(week => week.rows.filter(row => row.hasPlan).map(row => row.aggregationKey));
+  const all = names.flat();
+  assert.equal(new Set(all).size, all.length, '同じ名前の予定を複数の週に置かない');
+  weeks.forEach(week => week.rows.filter(row => row.hasPlan).forEach(row => {
+    assert.ok(row.actualHours <= row.plannedHours, `${week.periodKey} ${row.aggregationKey} が予定を超えている`);
+  }));
+  weeks.slice(1).forEach(week => week.rows.filter(row => row.hasPlan).forEach(row => assert.equal(row.complete, true)));
+  const today = addDaysYmd(currentMonday, 3);
+  weeks[0].rows.forEach(row => Object.keys(row.actualByDate).forEach(date => assert.ok(date < today, '今日以降に実績を入れない')));
 });
 
 test('プレビューの今週は予定・実績・会議で埋まっている', () => {
   const week = planningResult('week', currentWeek);
-  assert.ok(week.rows.filter(row => row.hasPlan).length >= 8);
+  const planned = week.rows.filter(row => row.hasPlan).length;
+  assert.ok(planned >= 5 && planned <= 7, '今週の予定は見やすい件数にとどめる');
   assert.ok(week.rows.some(row => row.planKind === 'added'));
   assert.ok(week.rows.some(row => !row.hasPlan && row.actualHours > 0));
   assert.ok(week.rows.some(row => Object.keys(row.actualByDate || {}).length >= 2));
-  assert.ok(week.totals.plannedHours >= 30);
+  assert.ok(week.totals.plannedHours >= 20);
   assert.ok(week.totals.actualHours >= 10);
   assert.ok(week.subtasks.length >= 6);
 
@@ -68,9 +78,19 @@ test('プレビューの今週は予定・実績・会議で埋まっている',
 
 test('プレビューの前週は実績が入った保存済み週になる', () => {
   const week = planningResult('week', previousWeek);
-  assert.ok(week.rows.filter(row => row.hasPlan).length >= 8);
-  assert.ok(week.totals.actualHours >= 20);
-  assert.ok(week.rows.find(row => row.aggregationKey === 'API連携').actualHours > week.rows.find(row => row.aggregationKey === 'API連携').plannedHours);
+  assert.ok(week.rows.filter(row => row.hasPlan).length >= 3);
+  assert.ok(week.totals.actualHours >= 10);
+  // 予定どおり終えた週として見せる。
+  week.rows.filter(row => row.hasPlan).forEach(row => assert.equal(row.actualHours, row.plannedHours));
+});
+
+test('プレビューの日次の行は週の実績と一致する', () => {
+  const week = planningResult('week', previousWeek);
+  const monday = demoDailyTasks(previousMonday);
+  const permission = monday.tasks.find(task => task.title.startsWith('権限まわり改修'));
+  assert.ok(permission);
+  assert.equal(permission.hours, week.rows.find(row => row.aggregationKey === '権限まわり改修').actualByDate[previousMonday]);
+  assert.equal(demoDailyTasks(addDaysYmd(currentMonday, 3)).tasks.length, 0, '今日以降の日は空');
 });
 
 test('プレビューの未保存週は予定なしで会議だけ入る', () => {

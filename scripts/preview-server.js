@@ -183,9 +183,9 @@ window.nextWeekKey = window.__nextWeekKey;
 }
 
 const previewDebug = `<style>
-.preview-debug { position: fixed; right: 16px; bottom: 16px; z-index: 800; width: min(320px, calc(100vw - 32px)); }
+.preview-debug { position: fixed; right: 16px; bottom: 16px; z-index: 800; display: flex; flex-direction: column-reverse; align-items: flex-end; }
 .preview-debug-toggle { border: 0; border-radius: 999px; padding: 8px 12px; background: #3c4043; color: #fff; font: 500 12px/1 Roboto, sans-serif; cursor: pointer; }
-.preview-debug-panel { margin-top: 8px; padding: 12px; border-radius: 12px; background: #fff; color: #3c4043; box-shadow: 0 8px 28px rgba(60,64,67,.28); font: 400 12px/1.4 Roboto, "Noto Sans JP", sans-serif; }
+.preview-debug-panel { box-sizing: border-box; width: min(320px, calc(100vw - 32px)); margin-bottom: 8px; padding: 12px; border-radius: 12px; background: #fff; color: #3c4043; box-shadow: 0 8px 28px rgba(60,64,67,.28); font: 400 12px/1.4 Roboto, "Noto Sans JP", sans-serif; }
 .preview-debug-panel[hidden] { display: none; }
 .preview-debug-panel p { margin: 0 0 8px; white-space: pre-wrap; }
 .preview-debug-panel label { display: grid; gap: 4px; margin: 8px 0; }
@@ -220,7 +220,62 @@ const previewDebug = `<style>
   var panel = document.getElementById('previewDebugPanel');
   var status = document.getElementById('previewDebugStatus');
   var dateInput = document.getElementById('previewDebugDate');
-  document.getElementById('previewDebugToggle').addEventListener('click', function () {
+  // debug ボタンはドラッグで動かせる。位置はこのブラウザに覚えておく。
+  // 開いたパネルはボタンの上へ、画面の内側に向けて広がる（左半分なら右へ、右半分なら左へ）。
+  var box = document.getElementById('previewDebug');
+  var toggle = document.getElementById('previewDebugToggle');
+  var POSITION_KEY = 'preview-debug-position-v2';
+  var dragged = false;
+  function placeDebug(left, bottom) {
+    var width = toggle.offsetWidth;
+    var x = Math.min(Math.max(0, window.innerWidth - width), Math.max(0, left));
+    var y = Math.min(Math.max(0, window.innerHeight - toggle.offsetHeight), Math.max(0, bottom));
+    var leftSide = x + width / 2 < window.innerWidth / 2;
+    box.style.left = leftSide ? x + 'px' : 'auto';
+    box.style.right = leftSide ? 'auto' : (window.innerWidth - x - width) + 'px';
+    box.style.bottom = y + 'px';
+    box.style.alignItems = leftSide ? 'flex-start' : 'flex-end';
+  }
+  try {
+    var saved = JSON.parse(localStorage.getItem(POSITION_KEY) || 'null');
+    if (saved) placeDebug(saved.left, saved.bottom);
+  } catch (_) {}
+  toggle.style.touchAction = 'none';
+  toggle.style.cursor = 'grab';
+  toggle.title = 'ドラッグで移動';
+  toggle.addEventListener('pointerdown', function (event) {
+    var startX = event.clientX;
+    var startY = event.clientY;
+    var rect = toggle.getBoundingClientRect();
+    var startLeft = rect.left;
+    var startBottom = window.innerHeight - rect.bottom;
+    dragged = false;
+    toggle.setPointerCapture(event.pointerId);
+    function move(moveEvent) {
+      var dx = moveEvent.clientX - startX;
+      var dy = moveEvent.clientY - startY;
+      if (!dragged && Math.abs(dx) + Math.abs(dy) < 5) return;
+      dragged = true;
+      toggle.style.cursor = 'grabbing';
+      placeDebug(startLeft + dx, startBottom - dy);
+    }
+    function end() {
+      toggle.removeEventListener('pointermove', move);
+      toggle.removeEventListener('pointerup', end);
+      toggle.removeEventListener('pointercancel', end);
+      toggle.style.cursor = 'grab';
+      if (!dragged) return;
+      var placed = toggle.getBoundingClientRect();
+      try {
+        localStorage.setItem(POSITION_KEY, JSON.stringify({ left: placed.left, bottom: window.innerHeight - placed.bottom }));
+      } catch (_) {}
+    }
+    toggle.addEventListener('pointermove', move);
+    toggle.addEventListener('pointerup', end);
+    toggle.addEventListener('pointercancel', end);
+  });
+  toggle.addEventListener('click', function () {
+    if (dragged) { dragged = false; return; }
     var open = panel.hidden;
     panel.hidden = !open;
     this.setAttribute('aria-expanded', open ? 'true' : 'false');
