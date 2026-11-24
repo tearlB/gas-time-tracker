@@ -320,3 +320,18 @@ test('取り込み済み・実施しない予定の判定は、今開いてい�
   assert.deepEqual(Array.from(context.knownImportedCalendarKeys()).sort(), ['cur', 'cur-item', 'next', 'prev']);
   assert.deepEqual(Array.from(context.knownExcludedCalendarKeys()).sort(), ['x-cur', 'x-local', 'x-next', 'x-prev']);
 });
+
+test('日の画面をまだ開いていないときは、空の日次で週のその日の実績を上書きしない', () => {
+  const source = fs.readFileSync('ui/planning_timeline.js', 'utf8');
+  const start = source.indexOf('    function liveDailyForWeek(');
+  const end = source.indexOf('    function weekTimelineDisplayModel(', start);
+  assert.ok(start >= 0 && end > start);
+  const context = { state: { daily: null }, dailyWeekKey: () => '2026-W48' };
+  vm.createContext(context);
+  vm.runInContext(source.slice(start, end), context);
+  context.state.daily = { date: '2026-11-25', loadedDate: '', rows: [] };
+  assert.equal(context.liveDailyForWeek('2026-W48'), null);
+  context.state.daily.loadedDate = '2026-11-25';
+  assert.equal(context.liveDailyForWeek('2026-W48'), context.state.daily);
+  assert.equal(context.liveDailyForWeek('2026-W49'), null);
+});

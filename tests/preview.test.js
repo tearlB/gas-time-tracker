@@ -49,17 +49,17 @@ test('プレビューの予定は週ごとに別で、実績が予定を超え�
   }));
   weeks.slice(1).forEach(week => week.rows.filter(row => row.hasPlan).forEach(row => assert.equal(row.complete, true)));
   const today = addDaysYmd(currentMonday, 3);
-  weeks[0].rows.forEach(row => Object.keys(row.actualByDate).forEach(date => assert.ok(date < today, '今日以降に実績を入れない')));
+  weeks[0].rows.forEach(row => Object.keys(row.actualByDate).forEach(date => assert.ok(date <= today, '明日以降に実績を入れない')));
 });
 
 test('プレビューの今週は予定・実績・会議で埋まっている', () => {
   const week = planningResult('week', currentWeek);
   const planned = week.rows.filter(row => row.hasPlan).length;
-  assert.ok(planned >= 5 && planned <= 7, '今週の予定は見やすい件数にとどめる');
+  assert.ok(planned >= 3 && planned <= 4, '今週の予定は見やすい件数にとどめる');
   assert.ok(week.rows.some(row => row.planKind === 'added'));
   assert.ok(week.rows.some(row => !row.hasPlan && row.actualHours > 0));
   assert.ok(week.rows.some(row => Object.keys(row.actualByDate || {}).length >= 2));
-  assert.ok(week.totals.plannedHours >= 20);
+  assert.ok(week.totals.plannedHours >= 15);
   assert.ok(week.totals.actualHours >= 10);
   assert.ok(week.subtasks.length >= 6);
 
@@ -78,8 +78,8 @@ test('プレビューの今週は予定・実績・会議で埋まっている',
 
 test('プレビューの前週は実績が入った保存済み週になる', () => {
   const week = planningResult('week', previousWeek);
-  assert.ok(week.rows.filter(row => row.hasPlan).length >= 3);
-  assert.ok(week.totals.actualHours >= 10);
+  assert.equal(week.rows.filter(row => row.hasPlan).length, 1);
+  assert.ok(week.totals.actualHours >= 6);
   // 予定どおり終えた週として見せる。
   week.rows.filter(row => row.hasPlan).forEach(row => assert.equal(row.actualHours, row.plannedHours));
 });
@@ -90,7 +90,7 @@ test('プレビューの日次の行は週の実績と一致する', () => {
   const permission = monday.tasks.find(task => task.title.startsWith('権限まわり改修'));
   assert.ok(permission);
   assert.equal(permission.hours, week.rows.find(row => row.aggregationKey === '権限まわり改修').actualByDate[previousMonday]);
-  assert.equal(demoDailyTasks(addDaysYmd(currentMonday, 3)).tasks.length, 0, '今日以降の日は空');
+  assert.equal(demoDailyTasks(addDaysYmd(currentMonday, 4)).tasks.length, 0, '明日以降の日は空');
 });
 
 test('プレビューの未保存週は予定なしで会議だけ入る', () => {
@@ -101,10 +101,14 @@ test('プレビューの未保存週は予定なしで会議だけ入る', () =>
 });
 
 test('プレビューの日次は週予定の子タスクで埋まっている', () => {
-  const today = demoDailyTasks(addDaysYmd(currentMonday, 2));
-  assert.ok(today.tasks.length >= 4);
-  assert.ok(today.tasks.some(task => task.title.startsWith('障害対応')));
-  assert.ok(today.tasks.some(task => task.type === 'interrupt' && task.title.startsWith('問い合わせ対応')));
+  const wednesday = demoDailyTasks(addDaysYmd(currentMonday, 2));
+  assert.ok(wednesday.tasks.length >= 3);
+  assert.ok(wednesday.tasks.some(task => task.title.startsWith('障害対応')));
+  // 今日（木曜）は途中まで入っていて、今日だけの作業もある。
+  const today = demoDailyTasks(addDaysYmd(currentMonday, 3));
+  assert.ok(today.tasks.length >= 2 && today.tasks.length <= 5);
+  assert.ok(today.tasks.some(task => task.type === 'interrupt' && task.title.startsWith('問い合わせ対応') && task.status !== '完了'));
+  assert.equal(demoDailyTasks(addDaysYmd(currentMonday, 4)).tasks.length, 0);
   assert.equal(demoDailyTasks(addDaysYmd(currentMonday, 6)).tasks.length, 0);
 });
 
@@ -271,13 +275,10 @@ test('日次の稼働消化は稼働時間に対する実績を使い割当一�
   assert.doesNotMatch(html, /上のタスクから稼働枠へ割り当て/);
 });
 
-test('プレビューの週予定候補は繰越元の週を保持する', () => {
+test('プレビューの週予定候補は今週の予定とサブタスクから作る', () => {
   const suggestions = demoImportSuggestions();
-  const carry = suggestions.find(item => item.carry);
-  assert.ok(carry);
-  assert.equal(carry.title, '設計レビュー');
-  assert.equal(carry.carryWeek, previousWeek);
   assert.ok(suggestions.every(item => item.title.indexOf('前週繰越') !== 0));
+  assert.ok(suggestions.some(item => item.title === '移行リハーサル' && item.periodKey === nextWeekKey(currentWeek)));
   const dash = suggestions.find(item => item.title === 'ダッシュボード刷新');
   assert.ok(dash.subtasks.length >= 2);
   assert.ok(dash.subtasks.every(task => task.parentKey === 'ダッシュボード刷新'));

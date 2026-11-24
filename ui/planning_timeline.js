@@ -343,7 +343,10 @@
       });
     }
     function liveDailyForWeek(weekKey) {
-      return state.daily && state.daily.date && dailyWeekKey(state.daily.date) === weekKey ? state.daily : null;
+      // 日次の行をまだ読み込んでいない（日の画面を開く前の空の状態）ときは使わない。空の行で週のその日の実績を0にしてしまうため。
+      const daily = state.daily;
+      if (!daily || !daily.date || daily.loadedDate !== daily.date) return null;
+      return dailyWeekKey(daily.date) === weekKey ? daily : null;
     }
     function weekTimelineDisplayModel(baseModel) {
       const key = state.planner.key;

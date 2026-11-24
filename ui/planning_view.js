@@ -1145,7 +1145,7 @@
       releaseReorderBinding(target);
       const today = ymd(new Date());
       const summary = state.planner.summary || {};
-      const liveDaily = state.daily && dailyWeekKey(state.daily.date) === state.planner.key ? state.daily : null;
+      const liveDaily = liveDailyForWeek(state.planner.key);
       const items = overlayLiveDailyActuals(sortByPlanPriority(plannerItems()), liveDaily);
       const rows = weekPlanRows(items, { range: summary.range, today: today, weekKey: state.planner.key, subtasks: summary.subtasks });
       const daysHtml = selectedDays.map(function(day) {
@@ -1216,7 +1216,7 @@
       const today = ymd(new Date());
       const excluded = knownExcludedCalendarKeys();
       const imported = knownImportedCalendarKeys();
-      const liveDaily = state.daily && dailyWeekKey(state.daily.date) === (state.planner && state.planner.key) ? state.daily : null;
+      const liveDaily = liveDailyForWeek(state.planner && state.planner.key);
       rememberWeekDisplay(state.planner.key, days, model, liveDaily);
       const interruptByDate = interruptEntriesByDate(days, model, liveDaily);
       const calendarVarianceKeys = {};
