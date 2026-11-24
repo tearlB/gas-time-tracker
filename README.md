@@ -2,6 +2,19 @@
 
 月・週・日の予定と実績を、一つのカレンダーで管理する Google Apps Script (GAS) の PWA です。
 
+## まず画面を見る（プレビュー）
+
+Google アカウントやログインがなくても、サンプルデータ入りの画面を手元で見られます。Node.js が必要です。
+
+```bash
+git clone https://github.com/tearlB/gas-time-tracker.git
+cd gas-time-tracker
+npm install
+npm run preview
+```
+
+起動したら http://127.0.0.1:4173 を開いてください。止めるときは `npm run preview:stop` です。Apps Script に載せて実際に使う場合は、下の「Apps Script へのセットアップ」に進んでください。
+
 ## 主な機能
 
 - 単一カレンダー: 日・週・月を切り替え、月から週、週から日へ掘り下げて操作。月は Backlog のようなガント表示（見るだけ）で、プロジェクトごとにまとめ、予定名・プロジェクト・状態・予定日のずれで絞り込める
@@ -25,7 +38,9 @@
 - カレンダー稼働時間・予定タスク: [`gas/planning.gs`](gas/planning.gs)
 - スプレッドシート構造の自動修復: [`gas/storage_schema.gs`](gas/storage_schema.gs)
 
-## 初回セットアップ
+## Apps Script へのセットアップ
+
+プレビューだけなら、この手順はいりません。
 
 1. GAS 用の依存関係をインストールする。
 
@@ -102,7 +117,7 @@ GAS エディタでウェブアプリとしてデプロイすると、PWA とし
 ## ローカル確認
 
 ```bash
-npm run ui:build
+npm install
 npm test
 npm run preview
 ```
